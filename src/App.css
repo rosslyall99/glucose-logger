@@ -832,6 +832,20 @@ th {
   line-height: 1.6;
 }
 
+.insights-card {
+  margin-bottom: 20px;
+}
+
+.insights-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.insights-stat-card {
+  min-height: 160px;
+}
+
 .insights-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -883,6 +897,16 @@ th {
 
   .insights-grid {
     grid-template-columns: 1fr;
+  }
+
+  .insights-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1080px) {
+  .insights-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

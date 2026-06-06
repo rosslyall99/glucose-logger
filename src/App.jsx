@@ -625,6 +625,182 @@ function getEventTimeOffsetMs(eventType) {
   return 11 * 60 * 1000;
 }
 
+function InsightsPanel({
+  readings,
+  events,
+  isLoadingReadings,
+  isLoadingEvents,
+}) {
+  const isLoading = isLoadingReadings || isLoadingEvents;
+  const readingValues = readings
+    .map((reading) => Number(reading.glucose_value))
+    .filter((value) => Number.isFinite(value));
+  const averageGlucose = readingValues.length
+    ? readingValues.reduce((sum, value) => sum + value, 0) / readingValues.length
+    : null;
+  const highestReading = readingValues.length ? Math.max(...readingValues) : null;
+  const lowestReading = readingValues.length ? Math.min(...readingValues) : null;
+
+  const morningReadings = readings.filter((reading) => {
+    const hour = new Date(reading.reading_time).getHours();
+    return hour >= 5 && hour < 12;
+  });
+  const afternoonEveningReadings = readings.filter((reading) => {
+    const hour = new Date(reading.reading_time).getHours();
+    return hour >= 12 && hour < 23;
+  });
+
+  const getAverageForReadings = (segmentReadings) => {
+    if (segmentReadings.length === 0) return null;
+
+    const total = segmentReadings.reduce(
+      (sum, reading) => sum + Number(reading.glucose_value),
+      0,
+    );
+
+    return total / segmentReadings.length;
+  };
+
+  const morningAverage = getAverageForReadings(morningReadings);
+  const afternoonEveningAverage = getAverageForReadings(afternoonEveningReadings);
+  const highReadings = readings.filter((reading) => Number(reading.glucose_value) > 9);
+  const carbEvents = events.filter((event) => event.event_type === "carbs");
+  const carbEventsWithHigherFollowUp = carbEvents.filter((event) => {
+    const eventTime = new Date(event.logged_at).getTime();
+
+    return readings.some((reading) => {
+      const readingTime = new Date(reading.reading_time).getTime();
+      const minutesAfterEvent = readingTime - eventTime;
+
+      return (
+        minutesAfterEvent >= 0 &&
+        minutesAfterEvent <= 2 * 60 * 60 * 1000 &&
+        Number(reading.glucose_value) > 9
+      );
+    });
+  });
+
+  const prompts = [];
+
+  if (
+    morningAverage !== null &&
+    afternoonEveningAverage !== null &&
+    morningReadings.length >= 2 &&
+    afternoonEveningReadings.length >= 2 &&
+    morningAverage > afternoonEveningAverage + 0.8
+  ) {
+    prompts.push(
+      "Morning readings appear a little higher than afternoon or evening readings today, which may be worth reviewing.",
+    );
+  }
+
+  if (highReadings.length >= 3) {
+    prompts.push(
+      `${highReadings.length} readings were above range today, which could be useful to compare with timing, meals, or activity as a discussion prompt.`,
+    );
+  }
+
+  if (carbEventsWithHigherFollowUp.length >= 2) {
+    prompts.push(
+      "Some readings after carb events appeared higher today, so carb timing or meal notes may be worth reviewing.",
+    );
+  }
+
+  if (events.length <= 1) {
+    prompts.push(
+      "There are only a few manual events recorded today, so adding more notes could make patterns easier to spot.",
+    );
+  }
+
+  if (prompts.length === 0 && !isLoading) {
+    prompts.push(
+      "No clear review prompts stand out from today’s entries yet; more readings or notes could be useful to compare later.",
+    );
+  }
+
+  return (
+    <>
+      <section className="table-card insights-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Insights</p>
+            <h2>Today at a glance</h2>
+          </div>
+        </div>
+
+        <p>
+          These insights are for personal logging and pattern spotting only. They
+          highlight observations from today’s entries and discussion prompts to
+          review later.
+        </p>
+
+        <section className="insights-summary-grid" aria-label="Today summary">
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Average glucose</span>
+            <strong>
+              {isLoading
+                ? "Loading..."
+                : averageGlucose === null
+                  ? "—"
+                  : averageGlucose.toFixed(1)}
+            </strong>
+            <p>From today’s glucose readings</p>
+          </article>
+
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Highest reading</span>
+            <strong>{isLoading ? "Loading..." : highestReading ?? "—"}</strong>
+            <p>Highest reading logged today</p>
+          </article>
+
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Lowest reading</span>
+            <strong>{isLoading ? "Loading..." : lowestReading ?? "—"}</strong>
+            <p>Lowest reading logged today</p>
+          </article>
+
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Number of readings</span>
+            <strong>{isLoadingReadings ? "Loading..." : readings.length}</strong>
+            <p>Glucose readings recorded today</p>
+          </article>
+
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Manual events</span>
+            <strong>{isLoadingEvents ? "Loading..." : events.length}</strong>
+            <p>Entries from carbs, insulin, or notes today</p>
+          </article>
+        </section>
+      </section>
+
+      <section className="table-card insights-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Patterns to review</p>
+            <h2>Discussion prompts</h2>
+          </div>
+        </div>
+
+        <div className="insights-grid">
+          {isLoading ? (
+            <article>
+              <strong>Loading today’s patterns</strong>
+              <p>Today’s readings and events are still loading.</p>
+            </article>
+          ) : (
+            prompts.map((prompt) => (
+              <article key={prompt}>
+                <strong>Review prompt</strong>
+                <p>{prompt}</p>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+    </>
+  );
+}
+
 function Dashboard({ session }) {
   const [readings, setReadings] = useState([]);
   const [events, setEvents] = useState([]);
@@ -801,6 +977,14 @@ function Dashboard({ session }) {
 
     return total / todayReadings.length;
   }, [todayReadings]);
+
+  const todayEvents = useMemo(() => {
+    const today = new Date().toDateString();
+
+    return events.filter((event) => {
+      return new Date(event.logged_at).toDateString() === today;
+    });
+  }, [events]);
 
   const chartWindow = useMemo(() => {
     const end = new Date();
@@ -1557,7 +1741,14 @@ function Dashboard({ session }) {
         </>
       ) : null}
 
-      {activePage === "insights" ? <InsightsPanel /> : null}
+      {activePage === "insights" ? (
+        <InsightsPanel
+          readings={todayReadings}
+          events={todayEvents}
+          isLoadingReadings={isLoadingReadings}
+          isLoadingEvents={isLoadingEvents}
+        />
+      ) : null}
 
       {editingEvent ? (
         <EventModal
