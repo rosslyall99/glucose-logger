@@ -464,7 +464,7 @@ function RecordEventPanel({ userId, onSaved }) {
   const [activeEventType, setActiveEventType] = useState(null);
 
   return (
-    <section className="record-panel">
+    <section className="table-card record-panel">
       <div className="section-heading">
         <div>
           <p className="eyebrow">Record event</p>
@@ -1528,7 +1528,7 @@ function Dashboard({ session }) {
       ) : null}
 
       {activePage === "record" ? (
-        <>
+        <div className="record-page-sections">
           <RecordEventPanel userId={session.user.id} onSaved={loadEvents} />
           <TodayEventsList
             events={events}
@@ -1537,7 +1537,7 @@ function Dashboard({ session }) {
             onDelete={handleDeleteEvent}
             deletingEventId={deletingEventId}
           />
-        </>
+        </div>
       ) : null}
 
       {activePage === "chart" ? (

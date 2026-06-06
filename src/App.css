@@ -27,6 +27,10 @@ body {
     #eef3f8;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 button,
 input,
 textarea,
@@ -534,12 +538,21 @@ th {
 }
 
 .record-panel {
+  width: 100%;
   border: 1px solid rgba(84, 105, 130, 0.14);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 18px 45px rgba(34, 55, 84, 0.12);
   padding: 24px;
   margin-bottom: 20px;
+}
+
+.record-page-sections {
+  width: 100%;
+}
+
+.record-page-sections > * {
+  width: 100%;
 }
 
 .event-button-grid {
@@ -710,7 +723,6 @@ th {
   color: #1e5f8f;
 }
 
-
 .selected-event-clear {
   flex: 0 0 auto;
   border: 1px solid rgba(84, 105, 130, 0.18);
@@ -722,7 +734,6 @@ th {
   font-size: 0.84rem;
   font-weight: 900;
 }
-
 
 .log-item.event-carbs {
   border-color: rgba(37, 99, 235, 0.38);
@@ -788,7 +799,6 @@ th {
   .event-button {
     min-height: 96px;
   }
-
 
   .selected-event-clear {
     width: fit-content;
@@ -1123,7 +1133,6 @@ th {
   color: #475569;
 }
 
-
 .day-nav {
   display: inline-flex;
   align-items: center;
@@ -1160,9 +1169,9 @@ th {
 }
 
 .recorded-events-card {
+  width: 100%;
   margin-bottom: 20px;
 }
-
 
 .compact-readings-card .section-heading {
   margin-bottom: 10px;
@@ -1187,7 +1196,6 @@ th {
     display: none;
   }
 }
-
 
 /* Summary card status colors */
 .latest-status-text {
@@ -1661,4 +1669,14 @@ th {
   .chart-layout .chart-legend {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* Record Event desktop width polish */
+.event-button-grid {
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.event-button {
+  width: 100%;
 }
