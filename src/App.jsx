@@ -95,13 +95,7 @@ function GlucoseYAxisTick({ x, y, payload }) {
   const value = Number(payload?.value);
 
   return (
-    <text
-      x={x}
-      y={y}
-      dy={4}
-      textAnchor="end"
-      className="glucose-y-axis-tick"
-    >
+    <text x={x} y={y} dy={4} textAnchor="end" className="glucose-y-axis-tick">
       {value}
     </text>
   );
@@ -175,12 +169,7 @@ function ChartEventDot(props) {
         }
       }}
     >
-      <circle
-        cx={cx}
-        cy={cy}
-        r={13}
-        fill="transparent"
-      />
+      <circle cx={cx} cy={cy} r={13} fill="transparent" />
       <circle
         cx={cx}
         cy={cy}
@@ -340,7 +329,13 @@ function LoginScreen() {
   );
 }
 
-function EventModal({ eventType, userId, existingEvent = null, onClose, onSaved }) {
+function EventModal({
+  eventType,
+  userId,
+  existingEvent = null,
+  onClose,
+  onSaved,
+}) {
   const config = EVENT_CONFIG[eventType];
   const isEditing = Boolean(existingEvent);
   const [amount, setAmount] = useState(
@@ -547,10 +542,7 @@ function TodayEventsList({
                 </div>
 
                 <div className="log-event-main">
-                  <span
-                    className="log-event-dot"
-                    aria-hidden="true"
-                  />
+                  <span className="log-event-dot" aria-hidden="true" />
                   <strong
                     className="log-event-title"
                     title={event.notes || "No notes recorded"}
@@ -606,6 +598,53 @@ function TodayEventsList({
   );
 }
 
+function MobileChartEventsList({ events, isLoading }) {
+  return (
+    <section className="table-card recorded-events-card mobile-chart-events-card">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Recorded events</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p>Loading events...</p>
+      ) : events.length === 0 ? (
+        <p>No manual events in this period.</p>
+      ) : (
+        <div className="log-list mobile-chart-log-list">
+          {events.map((event) => {
+            const config = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.note;
+            const eventAmount = formatEventAmount(event);
+
+            return (
+              <article
+                key={event.id}
+                className={`log-item mobile-chart-log-item ${config.className}`}
+              >
+                <div className="log-datetime">
+                  <strong>{formatTime(event.logged_at)}</strong>
+                </div>
+
+                <div className="log-event-main">
+                  <span className="log-event-dot" aria-hidden="true" />
+                  <strong className="log-event-title">{config.label}</strong>
+                  {eventAmount ? (
+                    <span className="log-amount">{eventAmount}</span>
+                  ) : null}
+                  {event.notes ? (
+                    <span className="mobile-chart-event-note">{event.notes}</span>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function getEventLineColor(eventType) {
   if (eventType === "carbs") return "#2563eb";
   if (eventType === "fast_insulin") return "#dc2626";
@@ -636,10 +675,15 @@ function InsightsPanel({
     .map((reading) => Number(reading.glucose_value))
     .filter((value) => Number.isFinite(value));
   const averageGlucose = readingValues.length
-    ? readingValues.reduce((sum, value) => sum + value, 0) / readingValues.length
+    ? readingValues.reduce((sum, value) => sum + value, 0) /
+      readingValues.length
     : null;
-  const highestReading = readingValues.length ? Math.max(...readingValues) : null;
-  const lowestReading = readingValues.length ? Math.min(...readingValues) : null;
+  const highestReading = readingValues.length
+    ? Math.max(...readingValues)
+    : null;
+  const lowestReading = readingValues.length
+    ? Math.min(...readingValues)
+    : null;
 
   const morningReadings = readings.filter((reading) => {
     const hour = new Date(reading.reading_time).getHours();
@@ -662,8 +706,12 @@ function InsightsPanel({
   };
 
   const morningAverage = getAverageForReadings(morningReadings);
-  const afternoonEveningAverage = getAverageForReadings(afternoonEveningReadings);
-  const highReadings = readings.filter((reading) => Number(reading.glucose_value) > 9);
+  const afternoonEveningAverage = getAverageForReadings(
+    afternoonEveningReadings,
+  );
+  const highReadings = readings.filter(
+    (reading) => Number(reading.glucose_value) > 9,
+  );
   const carbEvents = events.filter((event) => event.event_type === "carbs");
   const carbEventsWithHigherFollowUp = carbEvents.filter((event) => {
     const eventTime = new Date(event.logged_at).getTime();
@@ -729,9 +777,9 @@ function InsightsPanel({
         </div>
 
         <p>
-          These insights are for personal logging and pattern spotting only. They
-          highlight observations from today’s entries and discussion prompts to
-          review later.
+          These insights are for personal logging and pattern spotting only.
+          They highlight observations from today’s entries and discussion
+          prompts to review later.
         </p>
 
         <section className="insights-summary-grid" aria-label="Today summary">
@@ -749,19 +797,23 @@ function InsightsPanel({
 
           <article className="stat-card insights-stat-card">
             <span className="card-label">Highest reading</span>
-            <strong>{isLoading ? "Loading..." : highestReading ?? "—"}</strong>
+            <strong>
+              {isLoading ? "Loading..." : (highestReading ?? "—")}
+            </strong>
             <p>Highest reading logged today</p>
           </article>
 
           <article className="stat-card insights-stat-card">
             <span className="card-label">Lowest reading</span>
-            <strong>{isLoading ? "Loading..." : lowestReading ?? "—"}</strong>
+            <strong>{isLoading ? "Loading..." : (lowestReading ?? "—")}</strong>
             <p>Lowest reading logged today</p>
           </article>
 
           <article className="stat-card insights-stat-card">
             <span className="card-label">Number of readings</span>
-            <strong>{isLoadingReadings ? "Loading..." : readings.length}</strong>
+            <strong>
+              {isLoadingReadings ? "Loading..." : readings.length}
+            </strong>
             <p>Glucose readings recorded today</p>
           </article>
 
@@ -812,10 +864,15 @@ function InsightsPanelStage1B({
     .map((reading) => Number(reading.glucose_value))
     .filter((value) => Number.isFinite(value));
   const averageGlucose = readingValues.length
-    ? readingValues.reduce((sum, value) => sum + value, 0) / readingValues.length
+    ? readingValues.reduce((sum, value) => sum + value, 0) /
+      readingValues.length
     : null;
-  const highestReading = readingValues.length ? Math.max(...readingValues) : null;
-  const lowestReading = readingValues.length ? Math.min(...readingValues) : null;
+  const highestReading = readingValues.length
+    ? Math.max(...readingValues)
+    : null;
+  const lowestReading = readingValues.length
+    ? Math.min(...readingValues)
+    : null;
 
   const morningReadings = readings.filter((reading) => {
     const hour = new Date(reading.reading_time).getHours();
@@ -838,7 +895,9 @@ function InsightsPanelStage1B({
   };
 
   const morningAverage = getAverageForReadings(morningReadings);
-  const afternoonEveningAverage = getAverageForReadings(afternoonEveningReadings);
+  const afternoonEveningAverage = getAverageForReadings(
+    afternoonEveningReadings,
+  );
   const aboveRangeReadings = readings.filter(
     (reading) => Number(reading.glucose_value) > 11.1,
   );
@@ -913,9 +972,9 @@ function InsightsPanelStage1B({
         </div>
 
         <p>
-          These insights are for personal logging and pattern spotting only. They
-          highlight observations from today's entries and discussion prompts to
-          review later.
+          These insights are for personal logging and pattern spotting only.
+          They highlight observations from today's entries and discussion
+          prompts to review later.
         </p>
 
         <p className="insights-safety-note">
@@ -938,19 +997,23 @@ function InsightsPanelStage1B({
 
           <article className="stat-card insights-stat-card">
             <span className="card-label">Highest reading</span>
-            <strong>{isLoading ? "Loading..." : highestReading ?? "-"}</strong>
+            <strong>
+              {isLoading ? "Loading..." : (highestReading ?? "-")}
+            </strong>
             <p>Highest reading logged today</p>
           </article>
 
           <article className="stat-card insights-stat-card">
             <span className="card-label">Lowest reading</span>
-            <strong>{isLoading ? "Loading..." : lowestReading ?? "-"}</strong>
+            <strong>{isLoading ? "Loading..." : (lowestReading ?? "-")}</strong>
             <p>Lowest reading logged today</p>
           </article>
 
           <article className="stat-card insights-stat-card">
             <span className="card-label">Number of readings</span>
-            <strong>{isLoadingReadings ? "Loading..." : readings.length}</strong>
+            <strong>
+              {isLoadingReadings ? "Loading..." : readings.length}
+            </strong>
             <p>Glucose readings recorded today</p>
           </article>
 
@@ -1075,7 +1138,10 @@ function Dashboard({ session }) {
     if (error) {
       setErrorMessage(error.message);
     } else {
-      if (selectedChartItem?.type === "event" && selectedChartItem.data.id === event.id) {
+      if (
+        selectedChartItem?.type === "event" &&
+        selectedChartItem.data.id === event.id
+      ) {
         setSelectedChartItem(null);
       }
       await loadEvents();
@@ -1098,7 +1164,11 @@ function Dashboard({ session }) {
         return;
       }
 
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+      if (
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT" ||
+        status === "CLOSED"
+      ) {
         setLiveStatus("Reconnecting");
         return;
       }
@@ -1206,8 +1276,7 @@ function Dashboard({ session }) {
     return readings.filter((reading) => {
       const readingTime = new Date(reading.reading_time).getTime();
       return (
-        readingTime >= chartWindow.startMs &&
-        readingTime <= chartWindow.endMs
+        readingTime >= chartWindow.startMs && readingTime <= chartWindow.endMs
       );
     });
   }, [readings, chartWindow]);
@@ -1231,16 +1300,22 @@ function Dashboard({ session }) {
   const chartTicks = useMemo(() => {
     if (chartRange === "today") {
       const sixHours = 6 * 60 * 60 * 1000;
-      return [0, 1, 2, 3, 4].map((step) => chartWindow.startMs + step * sixHours);
+      return [0, 1, 2, 3, 4].map(
+        (step) => chartWindow.startMs + step * sixHours,
+      );
     }
 
     if (chartRange === "last_4h") {
       const oneHour = 60 * 60 * 1000;
-      return [4, 3, 2, 1, 0].map((hoursAgo) => chartWindow.endMs - hoursAgo * oneHour);
+      return [4, 3, 2, 1, 0].map(
+        (hoursAgo) => chartWindow.endMs - hoursAgo * oneHour,
+      );
     }
 
     const fifteenMinutes = 15 * 60 * 1000;
-    return [4, 3, 2, 1, 0].map((stepsAgo) => chartWindow.endMs - stepsAgo * fifteenMinutes);
+    return [4, 3, 2, 1, 0].map(
+      (stepsAgo) => chartWindow.endMs - stepsAgo * fifteenMinutes,
+    );
   }, [chartRange, chartWindow]);
 
   const formatChartTick = (value) => {
@@ -1319,8 +1394,7 @@ function Dashboard({ session }) {
       .filter((event) => {
         const eventTime = new Date(event.logged_at).getTime();
         return (
-          eventTime >= chartWindow.startMs &&
-          eventTime <= chartWindow.endMs
+          eventTime >= chartWindow.startMs && eventTime <= chartWindow.endMs
         );
       })
       .sort((a, b) => {
@@ -1331,7 +1405,10 @@ function Dashboard({ session }) {
         const orderB = EVENT_TYPE_ORDER[b.event_type] ?? 99;
         if (orderA !== orderB) return orderA - orderB;
 
-        return new Date(a.created_at || a.logged_at) - new Date(b.created_at || b.logged_at);
+        return (
+          new Date(a.created_at || a.logged_at) -
+          new Date(b.created_at || b.logged_at)
+        );
       });
 
     const groupCounts = new Map();
@@ -1366,6 +1443,18 @@ function Dashboard({ session }) {
         event,
       };
     });
+  }, [events, chartWindow]);
+
+  const chartPeriodEvents = useMemo(() => {
+    return [...events]
+      .filter((event) => {
+        const eventTime = new Date(event.logged_at).getTime();
+        return (
+          eventTime >= chartWindow.startMs &&
+          eventTime <= chartWindow.endMs
+        );
+      })
+      .sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at));
   }, [events, chartWindow]);
 
   const periodReadings = useMemo(() => {
@@ -1406,7 +1495,10 @@ function Dashboard({ session }) {
 
     const chartNode = chartWrapRef.current;
     const updateChartWidth = () => {
-      const nextWidth = Math.max(0, Math.floor(chartNode.getBoundingClientRect().width));
+      const nextWidth = Math.max(
+        0,
+        Math.floor(chartNode.getBoundingClientRect().width),
+      );
       setChartWidth(nextWidth);
     };
 
@@ -1434,7 +1526,7 @@ function Dashboard({ session }) {
   const selectedChartReading =
     selectedChartItem?.type === "reading" ? selectedChartItem.data : null;
   const selectedChartEventConfig = selectedChartEvent
-    ? (EVENT_CONFIG[selectedChartEvent.event_type] || EVENT_CONFIG.note)
+    ? EVENT_CONFIG[selectedChartEvent.event_type] || EVENT_CONFIG.note
     : null;
   const selectedChartEventAmount = selectedChartEvent
     ? formatEventAmount(selectedChartEvent) || "Note"
@@ -1443,9 +1535,10 @@ function Dashboard({ session }) {
     ? getGlucoseSelectionTone(selectedChartReading.glucose)
     : "tone-grey";
 
-  const chartDayLabel = chartDayOffset === 0
-    ? "Today"
-    : formatDateOnly(new Date(chartWindow.startMs));
+  const chartDayLabel =
+    chartDayOffset === 0
+      ? "Today"
+      : formatDateOnly(new Date(chartWindow.startMs));
 
   return (
     <main className="app-shell">
@@ -1481,13 +1574,19 @@ function Dashboard({ session }) {
               <div className="account-popover">
                 <p>
                   <strong>Last checked</strong>
-                  <span>{lastUpdatedAt ? formatTime(lastUpdatedAt) : "Waiting"}</span>
+                  <span>
+                    {lastUpdatedAt ? formatTime(lastUpdatedAt) : "Waiting"}
+                  </span>
                 </p>
                 <p>
                   <strong>Signed in as</strong>
                   <span>{session.user.email}</span>
                 </p>
-                <button type="button" className="secondary-button" onClick={handleSignOut}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleSignOut}
+                >
                   Sign out
                 </button>
               </div>
@@ -1543,7 +1642,9 @@ function Dashboard({ session }) {
       {activePage === "chart" ? (
         <>
           <section className="summary-grid">
-            <article className={`latest-card latest-reading-simple ${status.className}`}>
+            <article
+              className={`latest-card latest-reading-simple ${status.className}`}
+            >
               <span className="card-label">Latest reading</span>
 
               {isLoadingReadings ? (
@@ -1596,7 +1697,9 @@ function Dashboard({ session }) {
                     <button
                       type="button"
                       aria-label="Next day"
-                      onClick={() => setChartDayOffset((offset) => Math.max(0, offset - 1))}
+                      onClick={() =>
+                        setChartDayOffset((offset) => Math.max(0, offset - 1))
+                      }
                       disabled={chartDayOffset === 0}
                     >
                       ›
@@ -1645,144 +1748,157 @@ function Dashboard({ session }) {
                 <p className="chart-empty">No chart data yet.</p>
               ) : (
                 <div className="chart-wrap" ref={chartWrapRef}>
-                    {chartWidth > 0 ? (
-                      <ComposedChart
-                        width={chartWidth}
-                        height={390}
-                        data={chartData}
-                        margin={{ top: 18, right: 0, left: 0, bottom: 34 }}
-                      >
-                        <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                        <XAxis
-                          dataKey="x"
-                          type="number"
-                          scale="time"
-                          domain={[chartWindow.displayStartMs, chartWindow.displayEndMs]}
-                          ticks={chartTicks}
-                          padding={{ left: 0, right: 0 }}
-                          height={48}
-                          interval={0}
-                          minTickGap={0}
-                          tickMargin={8}
-                          tick={(props) => (
-                            <GlucoseXAxisTick
-                              {...props}
-                              startMs={chartWindow.displayStartMs}
-                              endMs={chartWindow.displayEndMs}
-                              tickFormatter={formatChartTick}
-                            />
-                          )}
-                          allowDataOverflow={false}
-                        />
-                        <YAxis
-                          yAxisId="glucose"
-                          type="number"
-                          domain={[1, 19]}
-                          ticks={GLUCOSE_GRID_TICKS}
-                          width={28}
-                          interval={0}
-                          axisLine={false}
-                          tickLine={false}
-                          tick={<GlucoseYAxisTick />}
-                          tickMargin={6}
-                          allowDataOverflow
-                        />
-                        <ReferenceLine
-                          yAxisId="glucose"
-                          y={5.5}
-                          stroke="#111827"
-                          strokeWidth={1.5}
-                          strokeOpacity={0.3}
-                        />
-                        <ReferenceLine
-                          yAxisId="glucose"
-                          y={9}
-                          stroke="#111827"
-                          strokeWidth={1.5}
-                          strokeOpacity={0.3}
-                        />
-                        <ReferenceLine
-                          yAxisId="glucose"
-                          y={3.9}
-                          stroke="#111827"
-                          strokeWidth={2.25}
-                          strokeOpacity={0.45}
-                        />
-                        <ReferenceLine
-                          yAxisId="glucose"
-                          y={11.1}
-                          stroke="#111827"
-                          strokeWidth={2.25}
-                          strokeOpacity={0.45}
-                        />
-
-                        {glucoseLineSegments.gapSegments.map((segment, index) => (
-                          <Line
-                            key={`glucose-gap-${index}`}
-                            yAxisId="glucose"
-                            name="Glucose gap"
-                            type="linear"
-                            data={segment}
-                            dataKey="glucose"
-                            stroke="#1e5f8f"
-                            strokeWidth={2}
-                            strokeDasharray="7 7"
-                            strokeOpacity={0.35}
-                            dot={false}
-                            activeDot={false}
-                            isAnimationActive={false}
+                  {chartWidth > 0 ? (
+                    <ComposedChart
+                      width={chartWidth}
+                      height={chartWidth <= 430 ? 300 : 390}
+                      data={chartData}
+                      margin={
+                        chartWidth <= 430
+                          ? { top: 12, right: 0, left: 6, bottom: 12 }
+                          : { top: 18, right: 0, left: 0, bottom: 34 }
+                      }
+                    >
+                      <CartesianGrid vertical={false} strokeDasharray="2 4" />
+                      <XAxis
+                        dataKey="x"
+                        type="number"
+                        scale="time"
+                        domain={[
+                          chartWindow.displayStartMs,
+                          chartWindow.displayEndMs,
+                        ]}
+                        ticks={chartTicks}
+                        padding={{ left: 0, right: 0 }}
+                        height={48}
+                        interval={0}
+                        minTickGap={0}
+                        tickMargin={8}
+                        tick={(props) => (
+                          <GlucoseXAxisTick
+                            {...props}
+                            startMs={chartWindow.displayStartMs}
+                            endMs={chartWindow.displayEndMs}
+                            tickFormatter={formatChartTick}
                           />
-                        ))}
+                        )}
+                        allowDataOverflow={false}
+                      />
+                      <YAxis
+                        yAxisId="glucose"
+                        type="number"
+                        domain={[1, 19]}
+                        ticks={GLUCOSE_GRID_TICKS}
+                        width={chartWidth <= 430 ? 18 : 28}
+                        interval={0}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={<GlucoseYAxisTick />}
+                        tickMargin={6}
+                        allowDataOverflow
+                      />
+                      <ReferenceLine
+                        yAxisId="glucose"
+                        y={5.5}
+                        stroke="#111827"
+                        strokeWidth={1.5}
+                        strokeOpacity={0.3}
+                      />
+                      <ReferenceLine
+                        yAxisId="glucose"
+                        y={9}
+                        stroke="#111827"
+                        strokeWidth={1.5}
+                        strokeOpacity={0.3}
+                      />
+                      <ReferenceLine
+                        yAxisId="glucose"
+                        y={3.9}
+                        stroke="#111827"
+                        strokeWidth={2.25}
+                        strokeOpacity={0.45}
+                      />
+                      <ReferenceLine
+                        yAxisId="glucose"
+                        y={11.1}
+                        stroke="#111827"
+                        strokeWidth={2.25}
+                        strokeOpacity={0.45}
+                      />
 
-                        {glucoseLineSegments.coloredSegments.map((segment) => (
-                          <Line
-                            key={segment.id}
-                            yAxisId="glucose"
-                            name="Glucose"
-                            type="monotone"
-                            data={segment.data}
-                            dataKey="glucose"
-                            stroke={segment.color}
-                            strokeWidth={4}
-                            dot={false}
-                            activeDot={false}
-                            isAnimationActive={false}
-                          />
-                        ))}
-
-                        <Scatter
+                      {glucoseLineSegments.gapSegments.map((segment, index) => (
+                        <Line
+                          key={`glucose-gap-${index}`}
                           yAxisId="glucose"
-                          data={chartData}
+                          name="Glucose gap"
+                          type="linear"
+                          data={segment}
                           dataKey="glucose"
-                          shape={(props) => (
-                            <ClickableGlucosePoint
-                              {...props}
-                              onSelect={(reading) =>
-                                setSelectedChartItem({ type: "reading", data: reading })
-                              }
-                              selectedReadingId={selectedReadingId}
-                            />
-                          )}
+                          stroke="#1e5f8f"
+                          strokeWidth={2}
+                          strokeDasharray="7 7"
+                          strokeOpacity={0.35}
+                          dot={false}
+                          activeDot={false}
+                          isAnimationActive={false}
                         />
+                      ))}
 
-                        <Scatter
+                      {glucoseLineSegments.coloredSegments.map((segment) => (
+                        <Line
+                          key={segment.id}
                           yAxisId="glucose"
-                          data={eventChartPoints}
-                          dataKey="eventDotY"
-                          shape={(props) => (
-                            <ChartEventDot
-                              {...props}
-                              onSelect={(event) =>
-                                setSelectedChartItem({ type: "event", data: event })
-                              }
-                              selectedEventId={selectedEventId}
-                            />
-                          )}
+                          name="Glucose"
+                          type="monotone"
+                          data={segment.data}
+                          dataKey="glucose"
+                          stroke={segment.color}
+                          strokeWidth={4}
+                          dot={false}
+                          activeDot={false}
+                          isAnimationActive={false}
                         />
-                      </ComposedChart>
-                    ) : null}
+                      ))}
+
+                      <Scatter
+                        yAxisId="glucose"
+                        data={chartData}
+                        dataKey="glucose"
+                        shape={(props) => (
+                          <ClickableGlucosePoint
+                            {...props}
+                            onSelect={(reading) =>
+                              setSelectedChartItem({
+                                type: "reading",
+                                data: reading,
+                              })
+                            }
+                            selectedReadingId={selectedReadingId}
+                          />
+                        )}
+                      />
+
+                      <Scatter
+                        yAxisId="glucose"
+                        data={eventChartPoints}
+                        dataKey="eventDotY"
+                        shape={(props) => (
+                          <ChartEventDot
+                            {...props}
+                            onSelect={(event) =>
+                              setSelectedChartItem({
+                                type: "event",
+                                data: event,
+                              })
+                            }
+                            selectedEventId={selectedEventId}
+                          />
+                        )}
+                      />
+                    </ComposedChart>
+                  ) : null}
                 </div>
-            )}
+              )}
             </div>
             {selectedChartItem ? (
               <section
@@ -1808,7 +1924,9 @@ function Dashboard({ session }) {
                   {selectedChartEvent ? (
                     <>
                       <div className="selected-chart-item-line">
-                        <strong>{formatDateTime(selectedChartEvent.logged_at)}</strong>
+                        <strong>
+                          {formatDateTime(selectedChartEvent.logged_at)}
+                        </strong>
                         <span
                           className={`selected-chart-item-pill ${
                             selectedChartEventConfig.className
@@ -1859,6 +1977,11 @@ function Dashboard({ session }) {
             ) : null}
           </section>
 
+          <MobileChartEventsList
+            events={chartPeriodEvents}
+            isLoading={isLoadingEvents}
+          />
+
           <section className="table-card compact-readings-card">
             <div className="section-heading readings-heading">
               <div>
@@ -1866,21 +1989,29 @@ function Dashboard({ session }) {
               </div>
 
               {periodReadings.length > READINGS_PER_PAGE ? (
-                <div className="pagination-controls" aria-label="Readings pagination">
+                <div
+                  className="pagination-controls"
+                  aria-label="Readings pagination"
+                >
                   <button
                     type="button"
-                    onClick={() => setReadingsPage((page) => Math.max(1, page - 1))}
+                    onClick={() =>
+                      setReadingsPage((page) => Math.max(1, page - 1))
+                    }
                     disabled={readingsPage <= 1}
                   >
                     Previous
                   </button>
                   <span>
-                    Page {Math.min(readingsPage, readingsTotalPages)} of {readingsTotalPages}
+                    Page {Math.min(readingsPage, readingsTotalPages)} of{" "}
+                    {readingsTotalPages}
                   </span>
                   <button
                     type="button"
                     onClick={() =>
-                      setReadingsPage((page) => Math.min(readingsTotalPages, page + 1))
+                      setReadingsPage((page) =>
+                        Math.min(readingsTotalPages, page + 1),
+                      )
                     }
                     disabled={readingsPage >= readingsTotalPages}
                   >
@@ -1912,10 +2043,13 @@ function Dashboard({ session }) {
                         <tr key={reading.id}>
                           <td>{formatDateTime(reading.reading_time)}</td>
                           <td>
-                            <strong>{reading.glucose_value}</strong> {reading.unit}
+                            <strong>{reading.glucose_value}</strong>{" "}
+                            {reading.unit}
                           </td>
                           <td>
-                            <span className={`status-pill ${rowStatus.className}`}>
+                            <span
+                              className={`status-pill ${rowStatus.className}`}
+                            >
                               {rowStatus.label}
                             </span>
                           </td>

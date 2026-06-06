@@ -1188,6 +1188,17 @@ th {
   margin-bottom: 20px;
 }
 
+.mobile-chart-events-card {
+  display: none;
+}
+
+.mobile-chart-event-note {
+  min-width: 0;
+  color: #52677f;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
 .compact-readings-card .section-heading {
   margin-bottom: 10px;
 }
@@ -1226,6 +1237,34 @@ th {
 
   .account-button span {
     display: none;
+  }
+
+  .mobile-chart-events-card {
+    display: block;
+  }
+
+  .mobile-chart-log-list {
+    gap: 8px;
+  }
+
+  .mobile-chart-log-item {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 10px 12px;
+  }
+
+  .mobile-chart-log-item .log-event-main {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .mobile-chart-log-item .log-event-title {
+    white-space: normal;
+  }
+
+  .chart-event-marker {
+    display: none !important;
   }
 }
 
@@ -1835,11 +1874,21 @@ th {
   .chart-layout .chart-range-controls button,
   .chart-layout .chart-legend span {
     width: 100% !important;
-    min-height: 40px !important;
-    padding: 9px 10px !important;
+    min-width: 0 !important;
+    min-height: 38px !important;
+    padding: 8px 6px !important;
     justify-content: center !important;
     text-align: center !important;
     white-space: normal !important;
+    font-size: 0.76rem !important;
+    line-height: 1.15 !important;
+    gap: 6px !important;
+  }
+
+  .chart-layout .chart-legend span::before {
+    flex: 0 0 8px !important;
+    width: 8px !important;
+    height: 8px !important;
   }
 
   .chart-layout .chart-wrap,
@@ -1852,11 +1901,89 @@ th {
   .chart-layout .chart-wrap {
     height: 290px !important;
     min-height: 290px !important;
-    overflow: hidden !important;
+    width: calc(100% + 12px) !important;
+    max-width: none !important;
+    margin-left: -6px !important;
+    margin-right: -6px !important;
+    justify-self: stretch !important;
+    overflow: visible !important;
   }
 
   .chart-wrap .recharts-wrapper,
   .chart-wrap .recharts-surface {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .chart-wrap svg {
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  .chart-event-marker {
+    transform-box: fill-box;
+    transform-origin: center;
+    transform: scale(1.28);
+    filter: drop-shadow(0 1px 3px rgba(15, 23, 42, 0.22));
+  }
+
+  .chart-event-marker circle:last-child {
+    stroke-width: 2.25 !important;
+  }
+}
+
+/* Final mobile chart polish only */
+@media (max-width: 760px) {
+  .chart-card {
+    padding: 12px !important;
+  }
+
+  .chart-layout .chart-wrap {
+    width: 100% !important;
     max-width: 100% !important;
+    height: 300px !important;
+    min-height: 300px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .chart-wrap .recharts-wrapper,
+  .chart-wrap .recharts-surface,
+  .chart-wrap svg {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .chart-layout .chart-range-controls,
+  .chart-layout .chart-legend {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .chart-layout .chart-range-controls button,
+  .chart-layout .chart-legend span {
+    min-height: 32px !important;
+    padding: 6px 4px !important;
+    font-size: 0.66rem !important;
+    line-height: 1 !important;
+    gap: 4px !important;
+    white-space: nowrap !important;
+  }
+
+  .chart-layout .chart-legend span::before {
+    flex: 0 0 7px !important;
+    width: 7px !important;
+    height: 7px !important;
+    margin: 0 !important;
+  }
+
+  .chart-event-marker {
+    filter: drop-shadow(0 1px 4px rgba(15, 23, 42, 0.28));
   }
 }
