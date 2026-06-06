@@ -1823,6 +1823,7 @@ th {
       "heading"
       "left"
       "right"
+      "day"
       "chart"
       "chart" !important;
     row-gap: 12px !important;
@@ -1836,10 +1837,7 @@ th {
     transform: none !important;
     width: 100% !important;
     max-width: 100% !important;
-    display: grid !important;
-    gap: 8px !important;
-    justify-items: center !important;
-    text-align: center !important;
+    display: contents !important;
     pointer-events: auto !important;
   }
 
@@ -1850,7 +1848,15 @@ th {
     text-align: center !important;
   }
 
+  .chart-heading-area .chart-title {
+    grid-row: 1 !important;
+    justify-self: center !important;
+  }
+
   .chart-heading-area .day-nav {
+    grid-row: 4 !important;
+    justify-self: center !important;
+    display: flex !important;
     justify-content: center !important;
   }
 
@@ -1864,10 +1870,12 @@ th {
   }
 
   .chart-layout .chart-range-controls {
+    grid-row: 2 !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 
   .chart-layout .chart-legend {
+    grid-row: 3 !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 
@@ -1894,7 +1902,7 @@ th {
   .chart-layout .chart-wrap,
   .chart-layout .chart-empty {
     grid-column: auto !important;
-    grid-row: auto !important;
+    grid-row: 5 !important;
     width: 100% !important;
   }
 

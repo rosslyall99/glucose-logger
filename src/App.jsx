@@ -1245,32 +1245,72 @@ function Dashboard({ session }) {
     });
   }, [events]);
 
+  const selectedDayStart = useMemo(() => {
+    const selectedDay = new Date();
+    selectedDay.setDate(selectedDay.getDate() - chartDayOffset);
+    selectedDay.setHours(0, 0, 0, 0);
+    return selectedDay;
+  }, [chartDayOffset]);
+
+  const selectedDayEnd = useMemo(() => {
+    const end = new Date(selectedDayStart);
+    end.setDate(end.getDate() + 1);
+    return end;
+  }, [selectedDayStart]);
+
+  const selectedDayReadings = useMemo(() => {
+    return [...readings]
+      .filter((reading) => {
+        const readingTime = new Date(reading.reading_time).getTime();
+        return (
+          readingTime >= selectedDayStart.getTime() &&
+          readingTime < selectedDayEnd.getTime()
+        );
+      })
+      .sort((a, b) => new Date(a.reading_time) - new Date(b.reading_time));
+  }, [readings, selectedDayStart, selectedDayEnd]);
+
   const chartWindow = useMemo(() => {
-    const end = new Date();
-    const start = new Date(end);
+    const isToday = chartDayOffset === 0;
+    const durationMs =
+      chartRange === "last_hour" ? 60 * 60 * 1000 : 4 * 60 * 60 * 1000;
 
-    if (chartRange === "last_hour") {
-      start.setTime(end.getTime() - 60 * 60 * 1000);
-    } else if (chartRange === "last_4h") {
-      start.setTime(end.getTime() - 4 * 60 * 60 * 1000);
-    } else {
-      const selectedDay = new Date();
-      selectedDay.setDate(selectedDay.getDate() - chartDayOffset);
+    if (chartRange === "last_hour" || chartRange === "last_4h") {
+      if (isToday) {
+        const end = new Date();
+        const start = new Date(end.getTime() - durationMs);
 
-      start.setTime(selectedDay.getTime());
-      start.setHours(0, 0, 0, 0);
+        return {
+          startMs: start.getTime(),
+          endMs: end.getTime(),
+          displayStartMs: start.getTime(),
+          displayEndMs: end.getTime(),
+        };
+      }
 
-      end.setTime(start.getTime());
-      end.setDate(end.getDate() + 1);
+      const latestSelectedDayReading =
+        selectedDayReadings[selectedDayReadings.length - 1] || null;
+      const fallbackEnd = new Date(selectedDayEnd.getTime() - 1);
+      const end = latestSelectedDayReading
+        ? new Date(latestSelectedDayReading.reading_time)
+        : fallbackEnd;
+      const start = new Date(end.getTime() - durationMs);
+
+      return {
+        startMs: start.getTime(),
+        endMs: end.getTime(),
+        displayStartMs: start.getTime(),
+        displayEndMs: end.getTime(),
+      };
     }
 
     return {
-      startMs: start.getTime(),
-      endMs: end.getTime(),
-      displayStartMs: start.getTime(),
-      displayEndMs: end.getTime(),
+      startMs: selectedDayStart.getTime(),
+      endMs: selectedDayEnd.getTime(),
+      displayStartMs: selectedDayStart.getTime(),
+      displayEndMs: selectedDayEnd.getTime(),
     };
-  }, [chartRange, chartDayOffset]);
+  }, [chartRange, chartDayOffset, selectedDayEnd, selectedDayReadings, selectedDayStart]);
 
   const chartReadings = useMemo(() => {
     return readings.filter((reading) => {
@@ -1538,7 +1578,7 @@ function Dashboard({ session }) {
   const chartDayLabel =
     chartDayOffset === 0
       ? "Today"
-      : formatDateOnly(new Date(chartWindow.startMs));
+      : formatDateOnly(selectedDayStart);
 
   return (
     <main className="app-shell">
@@ -1714,7 +1754,6 @@ function Dashboard({ session }) {
                   className={chartRange === "last_hour" ? "active" : ""}
                   onClick={() => {
                     setChartRange("last_hour");
-                    setChartDayOffset(0);
                   }}
                 >
                   Last hour
@@ -1724,7 +1763,6 @@ function Dashboard({ session }) {
                   className={chartRange === "last_4h" ? "active" : ""}
                   onClick={() => {
                     setChartRange("last_4h");
-                    setChartDayOffset(0);
                   }}
                 >
                   Last 4hrs
