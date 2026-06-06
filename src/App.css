@@ -836,6 +836,19 @@ th {
   margin-bottom: 20px;
 }
 
+.insights-safety-note {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 20px;
+  padding: 8px 12px;
+  border: 1px solid rgba(84, 105, 130, 0.16);
+  border-radius: 999px;
+  color: #475569;
+  background: rgba(84, 105, 130, 0.06);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .insights-summary-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -848,8 +861,8 @@ th {
 
 .insights-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .insights-grid article {

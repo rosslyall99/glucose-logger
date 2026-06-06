@@ -801,6 +801,195 @@ function InsightsPanel({
   );
 }
 
+function InsightsPanelStage1B({
+  readings,
+  events,
+  isLoadingReadings,
+  isLoadingEvents,
+}) {
+  const isLoading = isLoadingReadings || isLoadingEvents;
+  const readingValues = readings
+    .map((reading) => Number(reading.glucose_value))
+    .filter((value) => Number.isFinite(value));
+  const averageGlucose = readingValues.length
+    ? readingValues.reduce((sum, value) => sum + value, 0) / readingValues.length
+    : null;
+  const highestReading = readingValues.length ? Math.max(...readingValues) : null;
+  const lowestReading = readingValues.length ? Math.min(...readingValues) : null;
+
+  const morningReadings = readings.filter((reading) => {
+    const hour = new Date(reading.reading_time).getHours();
+    return hour >= 5 && hour < 12;
+  });
+  const afternoonEveningReadings = readings.filter((reading) => {
+    const hour = new Date(reading.reading_time).getHours();
+    return hour >= 12 && hour < 23;
+  });
+
+  const getAverageForReadings = (segmentReadings) => {
+    if (segmentReadings.length === 0) return null;
+
+    const total = segmentReadings.reduce(
+      (sum, reading) => sum + Number(reading.glucose_value),
+      0,
+    );
+
+    return total / segmentReadings.length;
+  };
+
+  const morningAverage = getAverageForReadings(morningReadings);
+  const afternoonEveningAverage = getAverageForReadings(afternoonEveningReadings);
+  const aboveRangeReadings = readings.filter(
+    (reading) => Number(reading.glucose_value) > 11.1,
+  );
+  const belowRangeReadings = readings.filter(
+    (reading) => Number(reading.glucose_value) < 3.9,
+  );
+  const carbEvents = events.filter((event) => event.event_type === "carbs");
+  const insulinEvents = events.filter((event) => {
+    return (
+      event.event_type === "fast_insulin" ||
+      event.event_type === "background_insulin"
+    );
+  });
+  const noteEvents = events.filter((event) => event.event_type === "note");
+  const hasEnoughMorningComparisonData =
+    morningReadings.length >= 2 && afternoonEveningReadings.length >= 2;
+
+  const patternCards = [
+    {
+      title: "Morning vs later readings",
+      body: hasEnoughMorningComparisonData
+        ? morningAverage > afternoonEveningAverage + 0.8
+          ? `Morning readings averaged ${morningAverage.toFixed(1)} compared with ${afternoonEveningAverage.toFixed(1)} later in the day, which may be worth reviewing.`
+          : `Morning readings averaged ${morningAverage.toFixed(1)} and later readings averaged ${afternoonEveningAverage.toFixed(1)} today, which could be useful to compare over time as a discussion prompt.`
+        : "Not enough data yet to compare morning readings with afternoon or evening readings.",
+    },
+    {
+      title: "Above-range readings",
+      body:
+        aboveRangeReadings.length === 0
+          ? "No readings above 11.1 were logged today."
+          : `${aboveRangeReadings.length} readings were above 11.1 today, which may be worth reviewing alongside meals, timing, or activity as a discussion prompt.`,
+    },
+    {
+      title: "Below-range readings",
+      body:
+        belowRangeReadings.length === 0
+          ? "No readings below 3.9 were logged today."
+          : `${belowRangeReadings.length} readings were below 3.9 today, which could be useful to compare with timing or notes as a discussion prompt.`,
+    },
+    {
+      title: "Carb events",
+      body:
+        carbEvents.length === 0
+          ? "No carb events are recorded today, so meal timing may be harder to compare. Not enough data yet for that pattern."
+          : `${carbEvents.length} carb event${carbEvents.length === 1 ? "" : "s"} ${carbEvents.length === 1 ? "is" : "are"} recorded today, which may be worth reviewing against nearby readings.`,
+    },
+    {
+      title: "Insulin events",
+      body:
+        insulinEvents.length === 0
+          ? "No insulin events are recorded today, so not enough data yet to compare readings with insulin timing."
+          : `${insulinEvents.length} insulin event${insulinEvents.length === 1 ? "" : "s"} ${insulinEvents.length === 1 ? "is" : "are"} recorded today, which could be useful to compare with readings later in the day.`,
+    },
+    {
+      title: "Notes",
+      body:
+        noteEvents.length === 0
+          ? "No notes are recorded today. Adding context like meals, activity, or how the day felt may make patterns easier to spot."
+          : `${noteEvents.length} note${noteEvents.length === 1 ? "" : "s"} ${noteEvents.length === 1 ? "is" : "are"} recorded today, which may be worth reviewing alongside the readings and events.`,
+    },
+  ];
+
+  return (
+    <>
+      <section className="table-card insights-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Insights</p>
+            <h2>Today at a glance</h2>
+          </div>
+        </div>
+
+        <p>
+          These insights are for personal logging and pattern spotting only. They
+          highlight observations from today's entries and discussion prompts to
+          review later.
+        </p>
+
+        <p className="insights-safety-note">
+          These are personal pattern-spotting prompts only and are not medical
+          advice.
+        </p>
+
+        <section className="insights-summary-grid" aria-label="Today summary">
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Average glucose</span>
+            <strong>
+              {isLoading
+                ? "Loading..."
+                : averageGlucose === null
+                  ? "-"
+                  : averageGlucose.toFixed(1)}
+            </strong>
+            <p>From today's glucose readings</p>
+          </article>
+
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Highest reading</span>
+            <strong>{isLoading ? "Loading..." : highestReading ?? "-"}</strong>
+            <p>Highest reading logged today</p>
+          </article>
+
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Lowest reading</span>
+            <strong>{isLoading ? "Loading..." : lowestReading ?? "-"}</strong>
+            <p>Lowest reading logged today</p>
+          </article>
+
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Number of readings</span>
+            <strong>{isLoadingReadings ? "Loading..." : readings.length}</strong>
+            <p>Glucose readings recorded today</p>
+          </article>
+
+          <article className="stat-card insights-stat-card">
+            <span className="card-label">Manual events</span>
+            <strong>{isLoadingEvents ? "Loading..." : events.length}</strong>
+            <p>Entries from carbs, insulin, or notes today</p>
+          </article>
+        </section>
+      </section>
+
+      <section className="table-card insights-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Patterns to review</p>
+            <h2>Discussion prompts</h2>
+          </div>
+        </div>
+
+        <div className="insights-grid">
+          {isLoading ? (
+            <article>
+              <strong>Loading today's patterns</strong>
+              <p>Today's readings and events are still loading.</p>
+            </article>
+          ) : (
+            patternCards.map((card) => (
+              <article key={card.title}>
+                <strong>{card.title}</strong>
+                <p>{card.body}</p>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+    </>
+  );
+}
+
 function Dashboard({ session }) {
   const [readings, setReadings] = useState([]);
   const [events, setEvents] = useState([]);
@@ -1742,7 +1931,7 @@ function Dashboard({ session }) {
       ) : null}
 
       {activePage === "insights" ? (
-        <InsightsPanel
+        <InsightsPanelStage1B
           readings={todayReadings}
           events={todayEvents}
           isLoadingReadings={isLoadingReadings}
