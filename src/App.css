@@ -921,7 +921,6 @@ th {
 }
 
 .insights-card > p {
-  max-width: 760px;
   margin: 0 0 18px;
   color: #52677f;
   line-height: 1.6;
@@ -1084,7 +1083,7 @@ th {
 }
 
 .data-page-actions .refresh-button {
-  width: auto;
+  width: 100%;
   min-height: 48px;
   margin-top: 0;
 }

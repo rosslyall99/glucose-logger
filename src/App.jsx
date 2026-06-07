@@ -384,10 +384,9 @@ function getStatus(reading) {
     return { label: "Unknown", className: "status-neutral" };
   }
 
-  if (value < 3.9) return { label: "Very low", className: "status-very-low" };
-  if (value < 5.6) return { label: "Low", className: "status-low" };
-  if (value < 8.4) return { label: "In range", className: "status-good" };
-  if (value < 11.2) return { label: "High", className: "status-high" };
+  if (value < 3.9) return { label: "Low", className: "status-low" };
+  if (value < 9) return { label: "In range", className: "status-good" };
+  if (value <= 11.1) return { label: "High", className: "status-high" };
 
   return { label: "Very high", className: "status-very-high" };
 }
