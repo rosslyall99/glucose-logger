@@ -324,7 +324,13 @@ function LoginScreen() {
   return (
     <main className="app-shell login-shell">
       <section className="login-card">
-        <p className="eyebrow">Glucose Logger</p>
+        <div className="login-brand">
+          <img src="/range-icon.svg" alt="" className="brand-mark" />
+          <div>
+            <p className="eyebrow">Range</p>
+            <p className="login-brand-subtitle">Personal glucose logging</p>
+          </div>
+        </div>
         <h1>Sign in</h1>
         <p className="hero-copy">
           Sign in to view your private glucose dashboard.
@@ -517,13 +523,6 @@ function RecordEventPanel({ userId, onSaved }) {
 
   return (
     <section className="table-card record-panel">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Record event</p>
-          <h2>Quick entry</h2>
-        </div>
-      </div>
-
       <div className="event-button-grid">
         {Object.entries(EVENT_CONFIG).map(([eventType, config]) => (
           <button
@@ -690,7 +689,9 @@ function MobileChartEventsList({ events, isLoading }) {
                     <span className="log-amount">{eventAmount}</span>
                   ) : null}
                   {event.notes ? (
-                    <span className="mobile-chart-event-note">{event.notes}</span>
+                    <span className="mobile-chart-event-note">
+                      {event.notes}
+                    </span>
                   ) : null}
                 </div>
               </article>
@@ -1148,7 +1149,9 @@ function InsightsPanelStage1B({
         </div>
 
         {exportErrorMessage ? (
-          <p className="form-error export-error-message">{exportErrorMessage}</p>
+          <p className="form-error export-error-message">
+            {exportErrorMessage}
+          </p>
         ) : null}
       </section>
     </>
@@ -1171,7 +1174,6 @@ function Dashboard({ session }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [exportState, setExportState] = useState("");
   const [exportErrorMessage, setExportErrorMessage] = useState("");
-  const [liveStatus, setLiveStatus] = useState("Connecting");
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const chartWrapRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(0);
@@ -1348,24 +1350,6 @@ function Dashboard({ session }) {
       loadDashboardData();
     }, 30000);
 
-    function updateLiveStatus(status) {
-      if (status === "SUBSCRIBED") {
-        setLiveStatus("Live");
-        return;
-      }
-
-      if (
-        status === "CHANNEL_ERROR" ||
-        status === "TIMED_OUT" ||
-        status === "CLOSED"
-      ) {
-        setLiveStatus("Reconnecting");
-        return;
-      }
-
-      setLiveStatus("Connecting");
-    }
-
     const glucoseChannel = supabase
       .channel("glucose-readings-live")
       .on(
@@ -1380,7 +1364,7 @@ function Dashboard({ session }) {
           setLastUpdatedAt(new Date());
         },
       )
-      .subscribe(updateLiveStatus);
+      .subscribe();
 
     const eventsChannel = supabase
       .channel("treatment-events-live")
@@ -1396,7 +1380,7 @@ function Dashboard({ session }) {
           setLastUpdatedAt(new Date());
         },
       )
-      .subscribe(updateLiveStatus);
+      .subscribe();
 
     return () => {
       window.clearInterval(fallbackRefresh);
@@ -1500,7 +1484,13 @@ function Dashboard({ session }) {
       displayStartMs: selectedDayStart.getTime(),
       displayEndMs: selectedDayEnd.getTime(),
     };
-  }, [chartRange, chartDayOffset, selectedDayEnd, selectedDayReadings, selectedDayStart]);
+  }, [
+    chartRange,
+    chartDayOffset,
+    selectedDayEnd,
+    selectedDayReadings,
+    selectedDayStart,
+  ]);
 
   const chartReadings = useMemo(() => {
     return readings.filter((reading) => {
@@ -1680,8 +1670,7 @@ function Dashboard({ session }) {
       .filter((event) => {
         const eventTime = new Date(event.logged_at).getTime();
         return (
-          eventTime >= chartWindow.startMs &&
-          eventTime <= chartWindow.endMs
+          eventTime >= chartWindow.startMs && eventTime <= chartWindow.endMs
         );
       })
       .sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at));
@@ -1766,26 +1755,20 @@ function Dashboard({ session }) {
     : "tone-grey";
 
   const chartDayLabel =
-    chartDayOffset === 0
-      ? "Today"
-      : formatDateOnly(selectedDayStart);
+    chartDayOffset === 0 ? "Today" : formatDateOnly(selectedDayStart);
 
   return (
     <main className="app-shell">
       <section className="hero-card app-header-card">
         <div className="app-header-title">
-          <h1>Glucose Logger</h1>
+          <img
+            src="/icons/range-header-logo-600.png"
+            alt="Range"
+            className="range-header-logo"
+          />
         </div>
 
         <div className="app-header-actions">
-          <span
-            className={`live-status-pill ${
-              liveStatus === "Live" ? "is-live" : "is-waiting"
-            }`}
-          >
-            {liveStatus}
-          </span>
-
           <div className="account-menu">
             <button
               type="button"
@@ -1831,7 +1814,7 @@ function Dashboard({ session }) {
           className={activePage === "record" ? "active" : ""}
           onClick={() => setActivePage("record")}
         >
-          Record event
+          Events
         </button>
         <button
           type="button"
@@ -1859,13 +1842,6 @@ function Dashboard({ session }) {
       {activePage === "record" ? (
         <div className="record-page-sections">
           <RecordEventPanel userId={session.user.id} onSaved={loadEvents} />
-          <TodayEventsList
-            events={events}
-            isLoading={isLoadingEvents}
-            onEdit={setEditingEvent}
-            onDelete={handleDeleteEvent}
-            deletingEventId={deletingEventId}
-          />
         </div>
       ) : null}
 
