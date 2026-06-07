@@ -324,17 +324,11 @@ function LoginScreen() {
   return (
     <main className="app-shell login-shell">
       <section className="login-card">
-        <div className="login-brand">
-          <img src="/range-icon.svg" alt="" className="brand-mark" />
-          <div>
-            <p className="eyebrow">Range</p>
-            <p className="login-brand-subtitle">Personal glucose logging</p>
-          </div>
-        </div>
-        <h1>Sign in</h1>
-        <p className="hero-copy">
-          Sign in to view your private glucose dashboard.
-        </p>
+        <img
+          src="/icons/range-header-logo-600.png"
+          alt="Range"
+          className="login-wordmark"
+        />
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label>

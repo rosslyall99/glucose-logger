@@ -269,6 +269,29 @@ th {
   td {
     padding: 12px 8px;
   }
+
+  .login-shell {
+    padding: 16px 0;
+  }
+
+  .login-card {
+    width: min(100%, 460px);
+    padding: 24px 20px;
+  }
+
+  .login-wordmark {
+    margin-bottom: 22px;
+  }
+
+  .login-form {
+    gap: 16px;
+    margin-top: 0;
+  }
+
+  .login-form input,
+  .login-form .refresh-button {
+    min-height: 50px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -281,6 +304,15 @@ th {
   .record-panel,
   .table-card {
     padding: 16px;
+  }
+
+  .login-card {
+    padding: 22px 18px;
+    border-radius: 22px;
+  }
+
+  .login-wordmark {
+    margin-bottom: 20px;
   }
 }
 
@@ -302,39 +334,28 @@ th {
   display: grid;
   min-height: 100vh;
   place-items: center;
+  padding: 28px 0;
 }
 
 .login-card {
-  width: min(480px, 100%);
+  width: min(460px, 100%);
   border: 1px solid rgba(84, 105, 130, 0.14);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 18px 45px rgba(34, 55, 84, 0.12);
-  padding: 28px;
+  padding: 32px;
 }
 
 .login-form {
   display: grid;
-  gap: 16px;
-  margin-top: 24px;
+  gap: 18px;
+  margin-top: 0;
 }
 
-.login-brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 14px;
-}
-
-.login-brand .eyebrow {
-  margin-bottom: 2px;
-}
-
-.login-brand-subtitle {
-  margin: 0;
-  color: #52677f;
-  font-size: 0.95rem;
-  font-weight: 700;
+.login-wordmark {
+  display: block;
+  width: min(100%, 360px);
+  margin: 0 auto 26px;
 }
 
 .login-form label {
@@ -346,11 +367,17 @@ th {
 
 .login-form input {
   width: 100%;
+  min-height: 52px;
   border: 1px solid rgba(84, 105, 130, 0.24);
   border-radius: 14px;
   padding: 12px 14px;
   color: #152033;
   background: #fff;
+}
+
+.login-form .refresh-button {
+  min-height: 52px;
+  margin-top: 6px;
 }
 
 .form-error {
