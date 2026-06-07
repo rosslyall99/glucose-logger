@@ -983,6 +983,22 @@ th {
   max-width: 720px;
 }
 
+.data-page-actions {
+  margin-top: 4px;
+}
+
+.data-page-actions .refresh-button {
+  width: auto;
+  min-height: 48px;
+  margin-top: 0;
+}
+
+.data-page-feedback {
+  margin: 12px 0 0;
+  color: #15803d;
+  font-weight: 700;
+}
+
 .export-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1034,6 +1050,10 @@ th {
 
   .export-actions {
     grid-template-columns: 1fr;
+  }
+
+  .data-page-actions .refresh-button {
+    width: 100%;
   }
 }
 

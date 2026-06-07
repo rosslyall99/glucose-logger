@@ -915,6 +915,277 @@ function InsightsPanelStage1B({
   exportState,
   exportErrorMessage,
 }) {
+  const dataPageIsLoading = isLoadingReadings || isLoadingEvents;
+  const [copyStatus, setCopyStatus] = useState("");
+
+  const buildDataPrompt = () => {
+    const sortedReadings = [...readings].sort(
+      (a, b) => new Date(a.reading_time) - new Date(b.reading_time),
+    );
+    const sortedEvents = [...events].sort(
+      (a, b) => new Date(a.logged_at) - new Date(b.logged_at),
+    );
+    const timeBlocks = [
+      { label: "Overnight", startHour: 0, endHour: 5 },
+      { label: "Morning", startHour: 5, endHour: 11 },
+      { label: "Midday", startHour: 11, endHour: 14 },
+      { label: "Afternoon", startHour: 14, endHour: 18 },
+      { label: "Evening", startHour: 18, endHour: 22 },
+      { label: "Night", startHour: 22, endHour: 24 },
+    ];
+
+    const formatPromptDate = (value) =>
+      new Intl.DateTimeFormat("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(new Date(value));
+
+    const summarizeReadings = (segmentReadings) => {
+      const values = segmentReadings
+        .map((reading) => Number(reading.glucose_value))
+        .filter((value) => Number.isFinite(value));
+
+      if (values.length === 0) {
+        return { count: 0, average: null, min: null, max: null };
+      }
+
+      const total = values.reduce((sum, value) => sum + value, 0);
+      return {
+        count: values.length,
+        average: total / values.length,
+        min: Math.min(...values),
+        max: Math.max(...values),
+      };
+    };
+
+    const getTrend = (segmentReadings) => {
+      if (segmentReadings.length < 2)
+        return "not enough data to draw a conclusion";
+
+      const first = Number(segmentReadings[0].glucose_value);
+      const last = Number(
+        segmentReadings[segmentReadings.length - 1].glucose_value,
+      );
+
+      if (!Number.isFinite(first) || !Number.isFinite(last)) {
+        return "not enough data to draw a conclusion";
+      }
+
+      if (last - first >= 1) return "generally rising";
+      if (last - first <= -1) return "generally falling";
+      return "fairly steady overall";
+    };
+
+    const sampleReadings = (segmentReadings, intervalMinutes = 30) => {
+      if (segmentReadings.length <= 1) return segmentReadings;
+
+      const sampled = [segmentReadings[0]];
+      let lastIncludedTime = new Date(
+        segmentReadings[0].reading_time,
+      ).getTime();
+
+      for (let index = 1; index < segmentReadings.length - 1; index += 1) {
+        const reading = segmentReadings[index];
+        const readingTime = new Date(reading.reading_time).getTime();
+
+        if (readingTime - lastIncludedTime >= intervalMinutes * 60 * 1000) {
+          sampled.push(reading);
+          lastIncludedTime = readingTime;
+        }
+      }
+
+      const lastReading = segmentReadings[segmentReadings.length - 1];
+      if (sampled[sampled.length - 1]?.id !== lastReading.id) {
+        sampled.push(lastReading);
+      }
+
+      return sampled;
+    };
+
+    const overallSummary = summarizeReadings(sortedReadings);
+    const dateReference =
+      sortedReadings[0]?.reading_time ||
+      sortedEvents[0]?.logged_at ||
+      new Date().toISOString();
+    const highestReading =
+      sortedReadings.length > 0
+        ? sortedReadings.reduce((highest, reading) =>
+            Number(reading.glucose_value) > Number(highest.glucose_value)
+              ? reading
+              : highest,
+          )
+        : null;
+    const lowestReading =
+      sortedReadings.length > 0
+        ? sortedReadings.reduce((lowest, reading) =>
+            Number(reading.glucose_value) < Number(lowest.glucose_value)
+              ? reading
+              : lowest,
+          )
+        : null;
+    const aboveRangeCount = sortedReadings.filter(
+      (reading) => Number(reading.glucose_value) > 11.1,
+    ).length;
+    const belowRangeCount = sortedReadings.filter(
+      (reading) => Number(reading.glucose_value) < 3.9,
+    ).length;
+
+    const timeBlockLines = timeBlocks.map((block) => {
+      const blockReadings = sortedReadings.filter((reading) => {
+        const hour = new Date(reading.reading_time).getHours();
+        return hour >= block.startHour && hour < block.endHour;
+      });
+
+      if (blockReadings.length === 0) {
+        return `- ${block.label}: no readings recorded, so not enough data to draw a conclusion.`;
+      }
+
+      const summary = summarizeReadings(blockReadings);
+      const highs = blockReadings.filter(
+        (reading) => Number(reading.glucose_value) > 11.1,
+      ).length;
+      const lows = blockReadings.filter(
+        (reading) => Number(reading.glucose_value) < 3.9,
+      ).length;
+
+      return `- ${block.label}: ${summary.count} readings, average ${formatGlucoseValue(summary.average)}, min ${formatGlucoseValue(summary.min)}, max ${formatGlucoseValue(summary.max)}, trend ${getTrend(blockReadings)}, highs above 11.1: ${highs}, lows below 3.9: ${lows}.`;
+    });
+
+    const eventLines =
+      sortedEvents.length > 0
+        ? sortedEvents.map((event) => {
+            const config = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.note;
+            const amount = formatEventAmount(event) || "No amount";
+            const notes = event.notes ? ` | Notes: ${event.notes}` : "";
+            return `- ${formatTime(event.logged_at)} | ${config.label} | ${amount}${notes}`;
+          })
+        : ["- No manual events recorded today."];
+
+    const sampledReadingLines =
+      sortedReadings.length > 0
+        ? sampleReadings(sortedReadings, 30).map(
+            (reading) =>
+              `- ${formatTime(reading.reading_time)}: ${formatGlucoseValue(reading.glucose_value)} ${reading.unit || "mmol/l"}`,
+          )
+        : ["- No glucose readings recorded today."];
+
+    return [
+      "This is for personal pattern spotting only. Do not give medical advice, diagnosis, or insulin dosing recommendations.",
+      "Do not recommend insulin dose changes.",
+      "Do not tell me to increase/decrease insulin.",
+      "Do not diagnose.",
+      "Use cautious wording such as: may be worth reviewing, could be useful to compare, a pattern to discuss, or not enough data to draw a conclusion.",
+      "",
+      "Please analyse this day of glucose and manual event data.",
+      "1. Summarise the day.",
+      "2. Describe glucose patterns through the day.",
+      "3. Identify periods of higher readings.",
+      "4. Identify periods of lower readings.",
+      "5. Compare readings before/after manual events where possible.",
+      "6. Point out data gaps.",
+      "7. Suggest things worth noting or discussing using cautious wording only.",
+      "",
+      `Date: ${formatPromptDate(dateReference)}`,
+      `Total readings: ${overallSummary.count}`,
+      `Average glucose: ${overallSummary.average === null ? "No data" : formatGlucoseValue(overallSummary.average)}`,
+      `Highest reading: ${highestReading ? `${formatGlucoseValue(highestReading.glucose_value)} ${highestReading.unit || "mmol/l"} at ${formatTime(highestReading.reading_time)}` : "No data"}`,
+      `Lowest reading: ${lowestReading ? `${formatGlucoseValue(lowestReading.glucose_value)} ${lowestReading.unit || "mmol/l"} at ${formatTime(lowestReading.reading_time)}` : "No data"}`,
+      `Count above 11.1: ${aboveRangeCount}`,
+      `Count below 3.9: ${belowRangeCount}`,
+      "",
+      "Time block summaries:",
+      ...timeBlockLines,
+      "",
+      "Chronological manual events:",
+      ...eventLines,
+      "",
+      "Condensed glucose reading summary (sampled at about 30 minute intervals):",
+      ...sampledReadingLines,
+    ].join("\n");
+  };
+
+  async function handleCopyPrompt() {
+    try {
+      await navigator.clipboard.writeText(buildDataPrompt());
+      setCopyStatus("success");
+    } catch {
+      setCopyStatus("error");
+    }
+  }
+
+  return (
+    <>
+      <section className="table-card insights-card data-prompt-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Data</p>
+          </div>
+        </div>
+        <div className="data-page-actions">
+          <button
+            type="button"
+            className="refresh-button"
+            onClick={handleCopyPrompt}
+            disabled={dataPageIsLoading}
+          >
+            {dataPageIsLoading
+              ? "Preparing prompt..."
+              : "Copy prompt for ChatGPT"}
+          </button>
+        </div>
+
+        {copyStatus === "success" ? (
+          <p className="data-page-feedback">Copied to clipboard.</p>
+        ) : null}
+
+        {copyStatus === "error" ? (
+          <p className="form-error data-page-feedback">
+            Could not copy automatically. Please try again.
+          </p>
+        ) : null}
+      </section>
+
+      <section className="table-card insights-card export-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Export data</p>
+          </div>
+        </div>
+        <div className="export-actions" aria-label="Export data downloads">
+          <button
+            type="button"
+            className="refresh-button"
+            onClick={onExportReadings}
+            disabled={exportState === "readings" || exportState === "events"}
+          >
+            {exportState === "readings"
+              ? "Preparing glucose CSV..."
+              : "Download glucose readings CSV"}
+          </button>
+
+          <button
+            type="button"
+            className="refresh-button"
+            onClick={onExportEvents}
+            disabled={exportState === "readings" || exportState === "events"}
+          >
+            {exportState === "events"
+              ? "Preparing events CSV..."
+              : "Download manual events CSV"}
+          </button>
+        </div>
+
+        {exportErrorMessage ? (
+          <p className="form-error export-error-message">
+            {exportErrorMessage}
+          </p>
+        ) : null}
+      </section>
+    </>
+  );
+
   const isLoading = isLoadingReadings || isLoadingEvents;
   const readingValues = readings
     .map((reading) => Number(reading.glucose_value))
@@ -1822,7 +2093,7 @@ function Dashboard({ session }) {
           className={activePage === "insights" ? "active" : ""}
           onClick={() => setActivePage("insights")}
         >
-          Insights
+          Data
         </button>
       </nav>
 
