@@ -84,6 +84,107 @@ function formatTime(value) {
   }).format(new Date(value));
 }
 
+function formatDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDateInput(value) {
+  if (!value) return null;
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+
+  return new Date(year, month - 1, day);
+}
+
+function startOfLocalDay(date) {
+  const nextDate = new Date(date);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function addDays(date, days) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function formatShortDate(value) {
+  if (!value) return "";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function getDataPeriodConfig(periodPreset, customStartDate, customEndDate) {
+  const now = new Date();
+
+  if (periodPreset === "today") {
+    const start = startOfLocalDay(now);
+    return {
+      label: "Today",
+      promptLabel: "Today",
+      filenameLabel: "today",
+      start,
+      end: now,
+      error: "",
+    };
+  }
+
+  if (periodPreset === "yesterday") {
+    const end = startOfLocalDay(now);
+    const start = addDays(end, -1);
+    return {
+      label: "Yesterday",
+      promptLabel: "Yesterday",
+      filenameLabel: "yesterday",
+      start,
+      end,
+      error: "",
+    };
+  }
+
+  const startDate = parseLocalDateInput(customStartDate);
+  const endDate = parseLocalDateInput(customEndDate);
+
+  if (!startDate || !endDate) {
+    return {
+      label: "Custom range",
+      promptLabel: "Custom range",
+      filenameLabel: "custom-range",
+      start: null,
+      end: null,
+      error: "Choose both a start date and an end date.",
+    };
+  }
+
+  if (endDate < startDate) {
+    return {
+      label: "Custom range",
+      promptLabel: "Custom range",
+      filenameLabel: "custom-range",
+      start: null,
+      end: null,
+      error: "End date cannot be before start date.",
+    };
+  }
+
+  return {
+    label: `Custom range: ${formatShortDate(startDate)} to ${formatShortDate(endDate)}`,
+    promptLabel: `Custom range: ${formatShortDate(startDate)} to ${formatShortDate(endDate)}`,
+    filenameLabel: `${customStartDate}-to-${customEndDate}`,
+    start: startOfLocalDay(startDate),
+    end: startOfLocalDay(addDays(endDate, 1)),
+    error: "",
+  };
+}
+
 function escapeCsvValue(value) {
   if (value === null || value === undefined) return "";
 
@@ -914,9 +1015,33 @@ function InsightsPanelStage1B({
   onExportEvents,
   exportState,
   exportErrorMessage,
+  dataPeriodPreset,
+  onDataPeriodPresetChange,
+  customStartDate,
+  customEndDate,
+  onCustomStartDateChange,
+  onCustomEndDateChange,
+  dataPeriodLabel,
+  dataPeriodError,
 }) {
   const dataPageIsLoading = isLoadingReadings || isLoadingEvents;
   const [copyStatus, setCopyStatus] = useState("");
+  const startDateInputRef = useRef(null);
+  const endDateInputRef = useRef(null);
+
+  const openNativeDatePicker = (input) => {
+    if (!input) return;
+
+    input.focus();
+
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+      } catch {
+        // Ignore browsers that expose but restrict showPicker.
+      }
+    }
+  };
 
   const buildDataPrompt = () => {
     const sortedReadings = [...readings].sort(
@@ -1087,6 +1212,7 @@ function InsightsPanelStage1B({
       "6. Point out data gaps.",
       "7. Suggest things worth noting or discussing using cautious wording only.",
       "",
+      `Selected period: ${dataPeriodLabel}`,
       `Date: ${formatPromptDate(dateReference)}`,
       `Total readings: ${overallSummary.count}`,
       `Average glucose: ${overallSummary.average === null ? "No data" : formatGlucoseValue(overallSummary.average)}`,
@@ -1117,6 +1243,99 @@ function InsightsPanelStage1B({
 
   return (
     <>
+      <section className="table-card insights-card data-period-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Data period</p>
+          </div>
+        </div>
+
+        <div className="data-period-controls" aria-label="Data period selector">
+          <button
+            type="button"
+            className={dataPeriodPreset === "today" ? "active" : ""}
+            onClick={() => onDataPeriodPresetChange("today")}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            className={dataPeriodPreset === "yesterday" ? "active" : ""}
+            onClick={() => onDataPeriodPresetChange("yesterday")}
+          >
+            Yesterday
+          </button>
+          <button
+            type="button"
+            className={dataPeriodPreset === "custom" ? "active" : ""}
+            onClick={() => onDataPeriodPresetChange("custom")}
+          >
+            Custom
+          </button>
+        </div>
+
+        {dataPeriodPreset === "custom" ? (
+          <div className="data-period-inputs">
+            <label>
+              Start date
+              <div className="data-period-input-wrap">
+                <input
+                  ref={startDateInputRef}
+                  type="date"
+                  value={customStartDate}
+                  onChange={(event) =>
+                    onCustomStartDateChange(event.target.value)
+                  }
+                  onClick={(event) => openNativeDatePicker(event.currentTarget)}
+                  onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+                />
+                <button
+                  type="button"
+                  className="data-period-picker-button"
+                  aria-label="Open start date picker"
+                  onClick={() =>
+                    openNativeDatePicker(startDateInputRef.current)
+                  }
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm12 8H5v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8ZM6 6a1 1 0 0 0-1 1v1h14V7a1 1 0 0 0-1-1H6Z" />
+                  </svg>
+                </button>
+              </div>
+            </label>
+            <label>
+              End date
+              <div className="data-period-input-wrap">
+                <input
+                  ref={endDateInputRef}
+                  type="date"
+                  value={customEndDate}
+                  onChange={(event) =>
+                    onCustomEndDateChange(event.target.value)
+                  }
+                  onClick={(event) => openNativeDatePicker(event.currentTarget)}
+                  onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+                />
+                <button
+                  type="button"
+                  className="data-period-picker-button"
+                  aria-label="Open end date picker"
+                  onClick={() => openNativeDatePicker(endDateInputRef.current)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm12 8H5v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8ZM6 6a1 1 0 0 0-1 1v1h14V7a1 1 0 0 0-1-1H6Z" />
+                  </svg>
+                </button>
+              </div>
+            </label>
+          </div>
+        ) : null}
+
+        {dataPeriodError ? (
+          <p className="form-error data-page-feedback">{dataPeriodError}</p>
+        ) : null}
+      </section>
+
       <section className="table-card insights-card data-prompt-card">
         <div className="section-heading">
           <div>
@@ -1128,7 +1347,7 @@ function InsightsPanelStage1B({
             type="button"
             className="refresh-button"
             onClick={handleCopyPrompt}
-            disabled={dataPageIsLoading}
+            disabled={dataPageIsLoading || Boolean(dataPeriodError)}
           >
             {dataPageIsLoading
               ? "Preparing prompt..."
@@ -1158,7 +1377,11 @@ function InsightsPanelStage1B({
             type="button"
             className="refresh-button"
             onClick={onExportReadings}
-            disabled={exportState === "readings" || exportState === "events"}
+            disabled={
+              exportState === "readings" ||
+              exportState === "events" ||
+              Boolean(dataPeriodError)
+            }
           >
             {exportState === "readings"
               ? "Preparing glucose CSV..."
@@ -1169,7 +1392,11 @@ function InsightsPanelStage1B({
             type="button"
             className="refresh-button"
             onClick={onExportEvents}
-            disabled={exportState === "readings" || exportState === "events"}
+            disabled={
+              exportState === "readings" ||
+              exportState === "events" ||
+              Boolean(dataPeriodError)
+            }
           >
             {exportState === "events"
               ? "Preparing events CSV..."
@@ -1439,6 +1666,13 @@ function Dashboard({ session }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [exportState, setExportState] = useState("");
   const [exportErrorMessage, setExportErrorMessage] = useState("");
+  const [dataPeriodPreset, setDataPeriodPreset] = useState("today");
+  const [customStartDate, setCustomStartDate] = useState(() =>
+    formatDateInputValue(new Date()),
+  );
+  const [customEndDate, setCustomEndDate] = useState(() =>
+    formatDateInputValue(new Date()),
+  );
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const chartWrapRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(0);
@@ -1497,13 +1731,9 @@ function Dashboard({ session }) {
   }
 
   async function loadEvents() {
-    const startOfWindow = new Date();
-    startOfWindow.setDate(startOfWindow.getDate() - 14);
-
     const { data, error } = await supabase
       .from("treatment_events")
       .select("id, logged_at, event_type, amount, unit, notes, created_at")
-      .gte("logged_at", startOfWindow.toISOString())
       .order("logged_at", { ascending: false });
 
     if (!error) {
@@ -1523,15 +1753,35 @@ function Dashboard({ session }) {
   }
 
   async function handleExportReadings() {
+    const nextDataPeriod = getDataPeriodConfig(
+      dataPeriodPreset,
+      customStartDate,
+      customEndDate,
+    );
+    if (nextDataPeriod.error) {
+      setExportErrorMessage(nextDataPeriod.error);
+      return;
+    }
+
     setExportState("readings");
     setExportErrorMessage("");
 
     try {
-      const exportRows = await fetchAllUserRows({
-        table: "glucose_readings",
-        columns: "reading_time, glucose_value, unit, created_at",
-        orderColumn: "reading_time",
-      });
+      const exportRows = readings
+        .filter((reading) => {
+          const readingTime = new Date(reading.reading_time).getTime();
+          return (
+            readingTime >= nextDataPeriod.start.getTime() &&
+            readingTime < nextDataPeriod.end.getTime()
+          );
+        })
+        .sort((a, b) => new Date(a.reading_time) - new Date(b.reading_time))
+        .map(({ reading_time, glucose_value, unit, created_at }) => ({
+          reading_time,
+          glucose_value,
+          unit,
+          created_at,
+        }));
       const csvContent = buildCsv(exportRows, [
         "reading_time",
         "glucose_value",
@@ -1539,7 +1789,10 @@ function Dashboard({ session }) {
         "created_at",
       ]);
 
-      downloadCsvFile("glucose-readings-export.csv", csvContent);
+      downloadCsvFile(
+        `range-glucose-readings-${nextDataPeriod.filenameLabel}.csv`,
+        csvContent,
+      );
     } catch (error) {
       setExportErrorMessage(error.message || "Could not export readings.");
     } finally {
@@ -1548,15 +1801,37 @@ function Dashboard({ session }) {
   }
 
   async function handleExportEvents() {
+    const nextDataPeriod = getDataPeriodConfig(
+      dataPeriodPreset,
+      customStartDate,
+      customEndDate,
+    );
+    if (nextDataPeriod.error) {
+      setExportErrorMessage(nextDataPeriod.error);
+      return;
+    }
+
     setExportState("events");
     setExportErrorMessage("");
 
     try {
-      const exportRows = await fetchAllUserRows({
-        table: "treatment_events",
-        columns: "logged_at, event_type, amount, unit, notes, created_at",
-        orderColumn: "logged_at",
-      });
+      const exportRows = events
+        .filter((event) => {
+          const eventTime = new Date(event.logged_at).getTime();
+          return (
+            eventTime >= nextDataPeriod.start.getTime() &&
+            eventTime < nextDataPeriod.end.getTime()
+          );
+        })
+        .sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at))
+        .map(({ logged_at, event_type, amount, unit, notes, created_at }) => ({
+          logged_at,
+          event_type,
+          amount,
+          unit,
+          notes,
+          created_at,
+        }));
       const csvContent = buildCsv(exportRows, [
         "logged_at",
         "event_type",
@@ -1566,7 +1841,10 @@ function Dashboard({ session }) {
         "created_at",
       ]);
 
-      downloadCsvFile("treatment-events-export.csv", csvContent);
+      downloadCsvFile(
+        `range-treatment-events-${nextDataPeriod.filenameLabel}.csv`,
+        csvContent,
+      );
     } catch (error) {
       setExportErrorMessage(error.message || "Could not export manual events.");
     } finally {
@@ -1683,6 +1961,35 @@ function Dashboard({ session }) {
       return new Date(event.logged_at).toDateString() === today;
     });
   }, [events]);
+
+  const dataPeriod = useMemo(
+    () => getDataPeriodConfig(dataPeriodPreset, customStartDate, customEndDate),
+    [dataPeriodPreset, customStartDate, customEndDate],
+  );
+
+  const dataPeriodReadings = useMemo(() => {
+    if (dataPeriod.error || !dataPeriod.start || !dataPeriod.end) return [];
+
+    return readings.filter((reading) => {
+      const readingTime = new Date(reading.reading_time).getTime();
+      return (
+        readingTime >= dataPeriod.start.getTime() &&
+        readingTime < dataPeriod.end.getTime()
+      );
+    });
+  }, [readings, dataPeriod]);
+
+  const dataPeriodEvents = useMemo(() => {
+    if (dataPeriod.error || !dataPeriod.start || !dataPeriod.end) return [];
+
+    return events.filter((event) => {
+      const eventTime = new Date(event.logged_at).getTime();
+      return (
+        eventTime >= dataPeriod.start.getTime() &&
+        eventTime < dataPeriod.end.getTime()
+      );
+    });
+  }, [events, dataPeriod]);
 
   const selectedDayStart = useMemo(() => {
     const selectedDay = new Date();
@@ -2535,14 +2842,22 @@ function Dashboard({ session }) {
 
       {activePage === "insights" ? (
         <InsightsPanelStage1B
-          readings={todayReadings}
-          events={todayEvents}
+          readings={dataPeriodReadings}
+          events={dataPeriodEvents}
           isLoadingReadings={isLoadingReadings}
           isLoadingEvents={isLoadingEvents}
           onExportReadings={handleExportReadings}
           onExportEvents={handleExportEvents}
           exportState={exportState}
           exportErrorMessage={exportErrorMessage}
+          dataPeriodPreset={dataPeriodPreset}
+          onDataPeriodPresetChange={setDataPeriodPreset}
+          customStartDate={customStartDate}
+          customEndDate={customEndDate}
+          onCustomStartDateChange={setCustomStartDate}
+          onCustomEndDateChange={setCustomEndDate}
+          dataPeriodLabel={dataPeriod.label}
+          dataPeriodError={dataPeriod.error}
         />
       ) : null}
 

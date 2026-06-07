@@ -983,6 +983,102 @@ th {
   max-width: 720px;
 }
 
+.data-period-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.data-period-controls button {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(84, 105, 130, 0.18);
+  border-radius: 999px;
+  padding: 10px 8px;
+  background: #fff;
+  color: #52677f;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.data-period-controls button.active {
+  border-color: rgba(47, 174, 94, 0.35);
+  background: rgba(47, 174, 94, 0.12);
+  color: #15803d;
+}
+
+.data-period-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.data-period-inputs label {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  color: #52677f;
+  font-weight: 800;
+  text-align: center;
+}
+
+.data-period-input-wrap {
+  position: relative;
+}
+
+.data-period-inputs input[type="date"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid rgba(84, 105, 130, 0.22);
+  border-radius: 14px;
+  padding-left: 10px;
+  background: #fff;
+  color: #152033;
+  text-align: left;
+  text-align-last: left;
+  cursor: pointer;
+}
+
+.data-period-inputs input[type="date"]::-webkit-datetime-edit {
+  text-align: center;
+}
+
+.data-period-inputs input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  width: 40px;
+  height: 100%;
+  cursor: pointer;
+}
+
+.data-period-picker-button {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: rgba(47, 174, 94, 0.1);
+  color: #15803d;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.data-period-picker-button svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
 .data-page-actions {
   margin-top: 4px;
 }
@@ -1048,12 +1144,27 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .data-period-controls button {
+    padding: 9px 6px;
+    font-size: 0.82rem;
+  }
+
+  .data-period-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .export-actions {
     grid-template-columns: 1fr;
   }
 
   .data-page-actions .refresh-button {
     width: 100%;
+  }
+}
+
+@media (max-width: 340px) {
+  .data-period-inputs {
+    grid-template-columns: 1fr;
   }
 }
 
