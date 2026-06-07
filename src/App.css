@@ -627,6 +627,8 @@ th {
 .event-modal {
   position: relative;
   width: min(520px, 100%);
+  max-height: min(100vh - 36px, 760px);
+  overflow-y: auto;
   border-radius: 24px;
   background: #fff;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
@@ -671,6 +673,13 @@ th {
   color: #152033;
   background: #fff;
   resize: vertical;
+}
+
+.event-form-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 4px;
 }
 
 .chart-legend {
@@ -1010,7 +1019,8 @@ th {
 .pagination-controls button {
   border: 1px solid rgba(84, 105, 130, 0.22);
   border-radius: 999px;
-  padding: 8px 12px;
+  min-height: 44px;
+  padding: 10px 14px;
   background: #fff;
   color: #1e5f8f;
   cursor: pointer;
@@ -1065,10 +1075,12 @@ th {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .account-menu {
   position: relative;
+  min-width: 0;
 }
 
 .account-button {
@@ -1077,6 +1089,7 @@ th {
   gap: 8px;
   border: 1px solid rgba(84, 105, 130, 0.18);
   border-radius: 999px;
+  min-height: 44px;
   padding: 9px 12px;
   background: #ffffff;
   color: #1e5f8f;
@@ -1109,6 +1122,8 @@ th {
   margin: 0 0 12px;
   color: #52677f;
   font-size: 0.88rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .account-popover strong {
@@ -1228,15 +1243,29 @@ th {
     min-width: 0;
     flex-wrap: wrap;
     justify-content: space-between;
+    gap: 10px;
   }
 
-  .live-status-pill,
+  .live-status-pill {
+    flex: 0 1 auto;
+    min-height: 40px;
+  }
+
+  .account-menu {
+    margin-left: auto;
+  }
+
   .account-button {
     flex: 0 0 auto;
+    min-width: 44px;
   }
 
   .account-button span {
     display: none;
+  }
+
+  .account-popover {
+    width: min(300px, calc(100vw - 32px));
   }
 
   .mobile-chart-events-card {
@@ -1731,6 +1760,52 @@ th {
     padding: 8px;
   }
 
+  .modal-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .event-modal {
+    width: 100%;
+    max-height: min(100vh - 24px, 100%);
+    border-radius: 20px;
+    padding: 20px 16px 16px;
+  }
+
+  .modal-close {
+    top: 12px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .event-form {
+    gap: 14px;
+  }
+
+  .event-form label {
+    min-width: 0;
+  }
+
+  .event-form textarea {
+    min-height: 104px;
+  }
+
+  .input-with-unit {
+    min-height: 52px;
+    padding: 0 14px;
+  }
+
+  .input-with-unit input {
+    min-width: 0;
+    padding: 14px 0;
+  }
+
+  .event-form-actions {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
   .chart-card {
     padding: 16px;
   }
@@ -1761,10 +1836,56 @@ th {
     padding-bottom: 14px;
   }
 
+  .compact-readings-table {
+    table-layout: fixed;
+  }
+
   .compact-readings-table th,
   .compact-readings-table td {
     padding: 8px 8px;
     font-size: 0.88rem;
+    vertical-align: top;
+  }
+
+  .compact-readings-table th:first-child,
+  .compact-readings-table td:first-child {
+    width: 42%;
+  }
+
+  .compact-readings-table th:nth-child(2),
+  .compact-readings-table td:nth-child(2) {
+    width: 25%;
+  }
+
+  .compact-readings-table th:nth-child(3),
+  .compact-readings-table td:nth-child(3) {
+    width: 33%;
+  }
+
+  .compact-readings-table td {
+    overflow-wrap: anywhere;
+  }
+
+  .compact-readings-table .status-pill {
+    justify-content: center;
+    max-width: 100%;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .pagination-controls {
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  .pagination-controls span {
+    width: 100%;
+    text-align: center;
+    order: -1;
+  }
+
+  .pagination-controls button {
+    flex: 1 1 0;
   }
 }
 
@@ -1791,14 +1912,14 @@ th {
   }
 
   .event-button-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .event-button {
     width: 100%;
-    min-height: 82px;
-    padding: 14px 16px;
+    min-height: 112px;
+    padding: 16px;
   }
 
   .event-button span {
@@ -1993,5 +2114,11 @@ th {
 
   .chart-event-marker {
     filter: drop-shadow(0 1px 4px rgba(15, 23, 42, 0.28));
+  }
+}
+
+@media (max-width: 520px) {
+  .event-button-grid {
+    grid-template-columns: 1fr;
   }
 }

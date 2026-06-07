@@ -446,9 +446,27 @@ function EventModal({
 
           {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
 
-          <button type="submit" className="refresh-button" disabled={isSaving}>
-            {isSaving ? "Saving..." : isEditing ? "Save changes" : "Save event"}
-          </button>
+          <div className="event-form-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onClose}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="refresh-button"
+              disabled={isSaving}
+            >
+              {isSaving
+                ? "Saving..."
+                : isEditing
+                  ? "Save changes"
+                  : "Save event"}
+            </button>
+          </div>
         </form>
       </section>
     </div>
