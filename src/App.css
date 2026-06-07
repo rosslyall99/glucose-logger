@@ -919,6 +919,25 @@ th {
   line-height: 1.5;
 }
 
+.export-card p {
+  max-width: 720px;
+}
+
+.export-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.export-actions .secondary-button {
+  min-height: 48px;
+}
+
+.export-error-message {
+  margin-top: 12px;
+}
+
 @media (max-width: 760px) {
   .app-tabs {
     border-radius: 20px;
@@ -949,6 +968,10 @@ th {
   }
 
   .insights-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .export-actions {
     grid-template-columns: 1fr;
   }
 }

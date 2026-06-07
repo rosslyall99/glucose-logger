@@ -84,6 +84,45 @@ function formatTime(value) {
   }).format(new Date(value));
 }
 
+function escapeCsvValue(value) {
+  if (value === null || value === undefined) return "";
+
+  const stringValue = String(value);
+
+  if (
+    stringValue.includes(",") ||
+    stringValue.includes('"') ||
+    stringValue.includes("\n") ||
+    stringValue.includes("\r")
+  ) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+
+  return stringValue;
+}
+
+function buildCsv(rows, columns) {
+  const headerRow = columns.join(",");
+  const dataRows = rows.map((row) =>
+    columns.map((column) => escapeCsvValue(row[column])).join(","),
+  );
+
+  return [headerRow, ...dataRows].join("\r\n");
+}
+
+function downloadCsvFile(filename, csvContent) {
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(objectUrl);
+}
+
 const GLUCOSE_GRID_TICKS = Array.from({ length: 18 }, (_, index) => index + 1);
 const GLUCOSE_LINE_COLORS = {
   red: "#dc2626",
@@ -876,6 +915,10 @@ function InsightsPanelStage1B({
   events,
   isLoadingReadings,
   isLoadingEvents,
+  onExportReadings,
+  onExportEvents,
+  exportState,
+  exportErrorMessage,
 }) {
   const isLoading = isLoadingReadings || isLoadingEvents;
   const readingValues = readings
@@ -1067,6 +1110,47 @@ function InsightsPanelStage1B({
           )}
         </div>
       </section>
+
+      <section className="table-card insights-card export-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Export data</p>
+            <h2>Download your records</h2>
+          </div>
+        </div>
+
+        <p>
+          Download CSV files for your own records or to share with a clinician.
+        </p>
+
+        <div className="export-actions" aria-label="Export data downloads">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onExportReadings}
+            disabled={exportState === "readings" || exportState === "events"}
+          >
+            {exportState === "readings"
+              ? "Preparing glucose CSV..."
+              : "Download glucose readings CSV"}
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onExportEvents}
+            disabled={exportState === "readings" || exportState === "events"}
+          >
+            {exportState === "events"
+              ? "Preparing events CSV..."
+              : "Download manual events CSV"}
+          </button>
+        </div>
+
+        {exportErrorMessage ? (
+          <p className="form-error export-error-message">{exportErrorMessage}</p>
+        ) : null}
+      </section>
     </>
   );
 }
@@ -1085,10 +1169,46 @@ function Dashboard({ session }) {
   const [isLoadingReadings, setIsLoadingReadings] = useState(true);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [exportState, setExportState] = useState("");
+  const [exportErrorMessage, setExportErrorMessage] = useState("");
   const [liveStatus, setLiveStatus] = useState("Connecting");
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const chartWrapRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(0);
+
+  async function fetchAllUserRows({
+    table,
+    columns,
+    orderColumn,
+    pageSize = 1000,
+  }) {
+    const allRows = [];
+    let from = 0;
+
+    while (true) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
+        .from(table)
+        .select(columns)
+        .order(orderColumn, { ascending: true })
+        .range(from, to);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = data || [];
+      allRows.push(...rows);
+
+      if (rows.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+    return allRows;
+  }
 
   async function loadReadings() {
     setErrorMessage("");
@@ -1133,6 +1253,58 @@ function Dashboard({ session }) {
 
   async function handleSignOut() {
     await supabase.auth.signOut();
+  }
+
+  async function handleExportReadings() {
+    setExportState("readings");
+    setExportErrorMessage("");
+
+    try {
+      const exportRows = await fetchAllUserRows({
+        table: "glucose_readings",
+        columns: "reading_time, glucose_value, unit, created_at",
+        orderColumn: "reading_time",
+      });
+      const csvContent = buildCsv(exportRows, [
+        "reading_time",
+        "glucose_value",
+        "unit",
+        "created_at",
+      ]);
+
+      downloadCsvFile("glucose-readings-export.csv", csvContent);
+    } catch (error) {
+      setExportErrorMessage(error.message || "Could not export readings.");
+    } finally {
+      setExportState("");
+    }
+  }
+
+  async function handleExportEvents() {
+    setExportState("events");
+    setExportErrorMessage("");
+
+    try {
+      const exportRows = await fetchAllUserRows({
+        table: "treatment_events",
+        columns: "logged_at, event_type, amount, unit, notes, created_at",
+        orderColumn: "logged_at",
+      });
+      const csvContent = buildCsv(exportRows, [
+        "logged_at",
+        "event_type",
+        "amount",
+        "unit",
+        "notes",
+        "created_at",
+      ]);
+
+      downloadCsvFile("treatment-events-export.csv", csvContent);
+    } catch (error) {
+      setExportErrorMessage(error.message || "Could not export manual events.");
+    } finally {
+      setExportState("");
+    }
   }
 
   async function handleDeleteEvent(event) {
@@ -2126,6 +2298,10 @@ function Dashboard({ session }) {
           events={todayEvents}
           isLoadingReadings={isLoadingReadings}
           isLoadingEvents={isLoadingEvents}
+          onExportReadings={handleExportReadings}
+          onExportEvents={handleExportEvents}
+          exportState={exportState}
+          exportErrorMessage={exportErrorMessage}
         />
       ) : null}
 
