@@ -1651,6 +1651,7 @@ function InsightsPanelStage1B({
 
 function Dashboard({ session }) {
   const [readings, setReadings] = useState([]);
+  const [chartDayReadings, setChartDayReadings] = useState([]);
   const [events, setEvents] = useState([]);
   const [selectedChartItem, setSelectedChartItem] = useState(null);
   const [activePage, setActivePage] = useState("record");
@@ -1727,6 +1728,38 @@ function Dashboard({ session }) {
     }
 
     setIsLoadingReadings(false);
+  }
+
+  async function fetchAllGlucoseReadings(startIso, endIso) {
+    const pageSize = 1000;
+    let from = 0;
+    const allRows = [];
+
+    while (true) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
+        .from("glucose_readings")
+        .select("id, reading_time, glucose_value, unit, created_at")
+        .gte("reading_time", startIso)
+        .lt("reading_time", endIso)
+        .order("reading_time", { ascending: true })
+        .range(from, to);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = data || [];
+      allRows.push(...rows);
+
+      if (rows.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+    return allRows;
   }
 
   async function loadEvents() {
@@ -2003,6 +2036,43 @@ function Dashboard({ session }) {
     return end;
   }, [selectedDayStart]);
 
+  useEffect(() => {
+    if (activePage !== "chart" || chartRange !== "today") return undefined;
+
+    let isCurrent = true;
+
+    async function syncChartDayReadings() {
+      const startIso = selectedDayStart.toISOString();
+      const endIso = selectedDayEnd.toISOString();
+      try {
+        const data = await fetchAllGlucoseReadings(startIso, endIso);
+
+        // console.log("Chart day range", { startIso, endIso, readingsCount: data?.length || 0 });
+
+        if (!isCurrent) return;
+
+        setChartDayReadings(data || []);
+      } catch (error) {
+        if (!isCurrent) return;
+
+        setErrorMessage(error.message);
+        setChartDayReadings([]);
+      }
+    }
+
+    syncChartDayReadings();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [
+    activePage,
+    chartRange,
+    lastUpdatedAt,
+    selectedDayEnd,
+    selectedDayStart,
+  ]);
+
   const selectedDayReadings = useMemo(() => {
     return [...readings]
       .filter((reading) => {
@@ -2064,13 +2134,17 @@ function Dashboard({ session }) {
   ]);
 
   const chartReadings = useMemo(() => {
+    if (chartRange === "today") {
+      return chartDayReadings;
+    }
+
     return readings.filter((reading) => {
       const readingTime = new Date(reading.reading_time).getTime();
       return (
         readingTime >= chartWindow.startMs && readingTime <= chartWindow.endMs
       );
     });
-  }, [readings, chartWindow]);
+  }, [chartDayReadings, chartRange, readings, chartWindow]);
 
   const chartData = useMemo(() => {
     return [...chartReadings]
