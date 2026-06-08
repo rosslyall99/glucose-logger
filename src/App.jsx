@@ -231,6 +231,20 @@ const GLUCOSE_LINE_COLORS = {
   green: "#16a34a",
 };
 
+function downsampleChartPoints(points, maxPoints = 180) {
+  if (points.length <= maxPoints) return points;
+
+  const sampled = [];
+  const step = (points.length - 1) / (maxPoints - 1);
+
+  for (let index = 0; index < maxPoints; index += 1) {
+    const sourceIndex = Math.round(index * step);
+    sampled.push(points[sourceIndex]);
+  }
+
+  return sampled;
+}
+
 function GlucoseYAxisTick({ x, y, payload }) {
   const value = Number(payload?.value);
 
@@ -1652,6 +1666,8 @@ function InsightsPanelStage1B({
 function Dashboard({ session }) {
   const [readings, setReadings] = useState([]);
   const [chartDayReadings, setChartDayReadings] = useState([]);
+  const [isLoadingChartDayReadings, setIsLoadingChartDayReadings] =
+    useState(false);
   const [dataPeriodReadings, setDataPeriodReadings] = useState([]);
   const [events, setEvents] = useState([]);
   const [selectedChartItem, setSelectedChartItem] = useState(null);
@@ -2063,17 +2079,23 @@ function Dashboard({ session }) {
   }, [dataPeriod, lastUpdatedAt]);
 
   useEffect(() => {
-    if (activePage !== "chart" || chartRange !== "today") return undefined;
-
     let isCurrent = true;
 
     async function syncChartDayReadings() {
+      if (chartRange !== "today") {
+        if (!isCurrent) return;
+
+        setIsLoadingChartDayReadings(false);
+        return;
+      }
+
+      setIsLoadingChartDayReadings(true);
+
       const startIso = selectedDayStart.toISOString();
       const endIso = selectedDayEnd.toISOString();
+
       try {
         const data = await fetchAllGlucoseReadings(startIso, endIso);
-
-        // console.log("Chart day range", { startIso, endIso, readingsCount: data?.length || 0 });
 
         if (!isCurrent) return;
 
@@ -2083,6 +2105,10 @@ function Dashboard({ session }) {
 
         setErrorMessage(error.message);
         setChartDayReadings([]);
+      } finally {
+        if (isCurrent) {
+          setIsLoadingChartDayReadings(false);
+        }
       }
     }
 
@@ -2092,7 +2118,6 @@ function Dashboard({ session }) {
       isCurrent = false;
     };
   }, [
-    activePage,
     chartRange,
     lastUpdatedAt,
     selectedDayEnd,
@@ -2172,8 +2197,8 @@ function Dashboard({ session }) {
     });
   }, [chartDayReadings, chartRange, readings, chartWindow]);
 
-  const chartData = useMemo(() => {
-    return [...chartReadings]
+  const visualChartData = useMemo(() => {
+    const mappedPoints = [...chartReadings]
       .sort((a, b) => new Date(a.reading_time) - new Date(b.reading_time))
       .map((reading) => {
         const readingDate = new Date(reading.reading_time);
@@ -2186,7 +2211,11 @@ function Dashboard({ session }) {
           unit: reading.unit || "mmol/l",
         };
       });
-  }, [chartReadings]);
+
+    const maxPoints = chartRange === "today" ? 96 : 120;
+
+    return downsampleChartPoints(mappedPoints, maxPoints);
+  }, [chartReadings, chartRange]);
 
   const chartTicks = useMemo(() => {
     if (chartRange === "today") {
@@ -2218,17 +2247,17 @@ function Dashboard({ session }) {
   };
 
   const glucoseLineSegments = useMemo(() => {
-    if (chartData.length === 0) {
+    if (visualChartData.length === 0) {
       return { solidSegments: [], gapSegments: [], coloredSegments: [] };
     }
 
     const solidSegments = [];
     const gapSegments = [];
-    let currentSegment = [chartData[0]];
+    let currentSegment = [visualChartData[0]];
 
-    for (let index = 1; index < chartData.length; index += 1) {
-      const previousPoint = chartData[index - 1];
-      const point = chartData[index];
+    for (let index = 1; index < visualChartData.length; index += 1) {
+      const previousPoint = visualChartData[index - 1];
+      const point = visualChartData[index];
       const gapMs = point.x - previousPoint.x;
 
       if (gapMs > GLUCOSE_GAP_MS) {
@@ -2278,7 +2307,7 @@ function Dashboard({ session }) {
     });
 
     return { solidSegments, gapSegments, coloredSegments };
-  }, [chartData]);
+  }, [visualChartData]);
 
   const eventChartPoints = useMemo(() => {
     const chartEvents = events
@@ -2427,6 +2456,13 @@ function Dashboard({ session }) {
 
   const chartDayLabel =
     chartDayOffset === 0 ? "Today" : formatDateOnly(selectedDayStart);
+  const chartHeight = chartWidth > 0 && chartWidth <= 430 ? 300 : 390;
+  const showChartLoading =
+    chartRange === "today" &&
+    isLoadingChartDayReadings &&
+    chartDayReadings.length === 0;
+  const showChartEmpty = !showChartLoading && visualChartData.length === 0;
+  const shouldRenderGlucoseScatter = chartRange !== "today";
 
   return (
     <main className="app-shell">
@@ -2619,15 +2655,20 @@ function Dashboard({ session }) {
                 <span className="legend-background">Background</span>
               </div>
 
-              {chartData.length === 0 ? (
-                <p className="chart-empty">No chart data yet.</p>
-              ) : (
-                <div className="chart-wrap" ref={chartWrapRef}>
-                  {chartWidth > 0 ? (
+              <div
+                className="chart-wrap"
+                ref={chartWrapRef}
+                style={{ minHeight: chartHeight }}
+              >
+                {showChartLoading ? (
+                  <p className="chart-empty">Loading chart data...</p>
+                ) : showChartEmpty ? (
+                  <p className="chart-empty">No chart data yet.</p>
+                ) : chartWidth > 0 ? (
                     <ComposedChart
                       width={chartWidth}
-                      height={chartWidth <= 430 ? 300 : 390}
-                      data={chartData}
+                      height={chartHeight}
+                      data={visualChartData}
                       margin={
                         chartWidth <= 430
                           ? { top: 12, right: 0, left: 6, bottom: 12 }
@@ -2735,23 +2776,25 @@ function Dashboard({ session }) {
                         />
                       ))}
 
-                      <Scatter
-                        yAxisId="glucose"
-                        data={chartData}
-                        dataKey="glucose"
-                        shape={(props) => (
-                          <ClickableGlucosePoint
-                            {...props}
-                            onSelect={(reading) =>
-                              setSelectedChartItem({
-                                type: "reading",
-                                data: reading,
-                              })
-                            }
-                            selectedReadingId={selectedReadingId}
-                          />
-                        )}
-                      />
+                      {shouldRenderGlucoseScatter ? (
+                        <Scatter
+                          yAxisId="glucose"
+                          data={visualChartData}
+                          dataKey="glucose"
+                          shape={(props) => (
+                            <ClickableGlucosePoint
+                              {...props}
+                              onSelect={(reading) =>
+                                setSelectedChartItem({
+                                  type: "reading",
+                                  data: reading,
+                                })
+                              }
+                              selectedReadingId={selectedReadingId}
+                            />
+                          )}
+                        />
+                      ) : null}
 
                       <Scatter
                         yAxisId="glucose"
@@ -2771,9 +2814,8 @@ function Dashboard({ session }) {
                         )}
                       />
                     </ComposedChart>
-                  ) : null}
-                </div>
-              )}
+                ) : null}
+              </div>
             </div>
             {selectedChartItem ? (
               <section
