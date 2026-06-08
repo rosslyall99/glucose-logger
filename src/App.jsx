@@ -1652,6 +1652,7 @@ function InsightsPanelStage1B({
 function Dashboard({ session }) {
   const [readings, setReadings] = useState([]);
   const [chartDayReadings, setChartDayReadings] = useState([]);
+  const [dataPeriodReadings, setDataPeriodReadings] = useState([]);
   const [events, setEvents] = useState([]);
   const [selectedChartItem, setSelectedChartItem] = useState(null);
   const [activePage, setActivePage] = useState("record");
@@ -1662,6 +1663,8 @@ function Dashboard({ session }) {
   const [editingEvent, setEditingEvent] = useState(null);
   const [deletingEventId, setDeletingEventId] = useState(null);
   const [isLoadingReadings, setIsLoadingReadings] = useState(true);
+  const [isLoadingDataPeriodReadings, setIsLoadingDataPeriodReadings] =
+    useState(false);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [exportState, setExportState] = useState("");
@@ -1799,14 +1802,7 @@ function Dashboard({ session }) {
     setExportErrorMessage("");
 
     try {
-      const exportRows = readings
-        .filter((reading) => {
-          const readingTime = new Date(reading.reading_time).getTime();
-          return (
-            readingTime >= nextDataPeriod.start.getTime() &&
-            readingTime < nextDataPeriod.end.getTime()
-          );
-        })
+      const exportRows = [...dataPeriodReadings]
         .sort((a, b) => new Date(a.reading_time) - new Date(b.reading_time))
         .map(({ reading_time, glucose_value, unit, created_at }) => ({
           reading_time,
@@ -1999,18 +1995,6 @@ function Dashboard({ session }) {
     [dataPeriodPreset, customStartDate, customEndDate],
   );
 
-  const dataPeriodReadings = useMemo(() => {
-    if (dataPeriod.error || !dataPeriod.start || !dataPeriod.end) return [];
-
-    return readings.filter((reading) => {
-      const readingTime = new Date(reading.reading_time).getTime();
-      return (
-        readingTime >= dataPeriod.start.getTime() &&
-        readingTime < dataPeriod.end.getTime()
-      );
-    });
-  }, [readings, dataPeriod]);
-
   const dataPeriodEvents = useMemo(() => {
     if (dataPeriod.error || !dataPeriod.start || !dataPeriod.end) return [];
 
@@ -2035,6 +2019,48 @@ function Dashboard({ session }) {
     end.setDate(end.getDate() + 1);
     return end;
   }, [selectedDayStart]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function syncDataPeriodReadings() {
+      if (dataPeriod.error || !dataPeriod.start || !dataPeriod.end) {
+        if (!isCurrent) return;
+
+        setDataPeriodReadings([]);
+        setIsLoadingDataPeriodReadings(false);
+        return;
+      }
+
+      setIsLoadingDataPeriodReadings(true);
+
+      try {
+        const data = await fetchAllGlucoseReadings(
+          dataPeriod.start.toISOString(),
+          dataPeriod.end.toISOString(),
+        );
+
+        if (!isCurrent) return;
+
+        setDataPeriodReadings(data || []);
+      } catch (error) {
+        if (!isCurrent) return;
+
+        setErrorMessage(error.message);
+        setDataPeriodReadings([]);
+      } finally {
+        if (isCurrent) {
+          setIsLoadingDataPeriodReadings(false);
+        }
+      }
+    }
+
+    syncDataPeriodReadings();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [dataPeriod, lastUpdatedAt]);
 
   useEffect(() => {
     if (activePage !== "chart" || chartRange !== "today") return undefined;
@@ -2917,7 +2943,7 @@ function Dashboard({ session }) {
         <InsightsPanelStage1B
           readings={dataPeriodReadings}
           events={dataPeriodEvents}
-          isLoadingReadings={isLoadingReadings}
+          isLoadingReadings={isLoadingDataPeriodReadings}
           isLoadingEvents={isLoadingEvents}
           onExportReadings={handleExportReadings}
           onExportEvents={handleExportEvents}
