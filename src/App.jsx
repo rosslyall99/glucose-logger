@@ -616,7 +616,9 @@ function EventModal({
 
   return (
     <div className="modal-backdrop">
-      <section className="event-modal">
+      <section
+        className={`event-modal ${isEditing ? "event-edit-modal" : ""}`}
+      >
         <button type="button" className="modal-close" onClick={onClose}>
           ×
         </button>
@@ -644,7 +646,13 @@ function EventModal({
           {!isNote ? (
             <label>
               {config.amountLabel}
-              <div className="input-with-unit">
+              <div
+                className={
+                  isEditing
+                    ? "event-edit-amount-control"
+                    : "input-with-unit"
+                }
+              >
                 <input
                   type="number"
                   min="0"
@@ -661,9 +669,9 @@ function EventModal({
           ) : null}
 
           {isEditing ? (
-            <>
-              <label>
-                Logged date
+            <div className="event-edit-datetime-row">
+              <label className="event-edit-field">
+                <span>Logged date</span>
                 <input
                   type="date"
                   value={loggedDate}
@@ -671,15 +679,15 @@ function EventModal({
                 />
               </label>
 
-              <label>
-                Logged time
+              <label className="event-edit-field">
+                <span>Logged time</span>
                 <input
                   type="time"
                   value={loggedTime}
                   onChange={(event) => setLoggedTime(event.target.value)}
                 />
               </label>
-            </>
+            </div>
           ) : null}
 
           <label>
@@ -945,21 +953,29 @@ function MobileChartEventsList({
                 }}
                 {...getLongPressHandlers(event)}
               >
-                <div className="log-datetime">
-                  <strong>{formatTime(event.logged_at)}</strong>
-                </div>
+                <div className="mobile-event-grid">
+                  <div className="mobile-event-time">
+                    <strong>{formatTime(event.logged_at)}</strong>
+                  </div>
 
-                <div className="log-event-main">
-                  <span className="log-event-dot" aria-hidden="true" />
-                  <strong className="log-event-title">{config.label}</strong>
+                  <div className="mobile-event-type">
+                    <span className="log-event-dot" aria-hidden="true" />
+                    <strong className="log-event-title">{config.label}</strong>
+                  </div>
                   {eventAmount ? (
-                    <span className="log-amount">{eventAmount}</span>
+                    <div className="mobile-event-amount">
+                      <span className="log-amount event-value-pill">
+                        {eventAmount}
+                      </span>
+                    </div>
                   ) : null}
-                  {event.notes ? (
-                    <span className="mobile-chart-event-note">
-                      {event.notes}
-                    </span>
-                  ) : null}
+                  <div className="mobile-event-notes">
+                    {event.notes ? (
+                      <span className="mobile-chart-event-note">
+                        {event.notes}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </article>
             );
