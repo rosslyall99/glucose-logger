@@ -1340,7 +1340,7 @@ function InsightsPanelStage1B({
       <section className="table-card insights-card data-prompt-card">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Data</p>
+            <p className="eyebrow">AI Prompt</p>
           </div>
         </div>
         <div className="data-page-actions">
@@ -1378,10 +1378,7 @@ function InsightsPanelStage1B({
             type="button"
             className="refresh-button"
             onClick={onExportCombinedData}
-            disabled={
-              exportState === "combined" ||
-              Boolean(dataPeriodError)
-            }
+            disabled={exportState === "combined" || Boolean(dataPeriodError)}
           >
             {exportState === "combined"
               ? "Preparing combined CSV..."
@@ -2066,12 +2063,7 @@ function Dashboard({ session }) {
     return () => {
       isCurrent = false;
     };
-  }, [
-    chartRange,
-    lastUpdatedAt,
-    selectedDayEnd,
-    selectedDayStart,
-  ]);
+  }, [chartRange, lastUpdatedAt, selectedDayEnd, selectedDayStart]);
 
   const selectedDayReadings = useMemo(() => {
     return [...readings]
@@ -2614,155 +2606,155 @@ function Dashboard({ session }) {
                 ) : showChartEmpty ? (
                   <p className="chart-empty">No chart data yet.</p>
                 ) : chartWidth > 0 ? (
-                    <ComposedChart
-                      width={chartWidth}
-                      height={chartHeight}
-                      data={visualChartData}
-                      margin={
-                        chartWidth <= 430
-                          ? { top: 12, right: 0, left: 6, bottom: 12 }
-                          : { top: 18, right: 0, left: 0, bottom: 34 }
-                      }
-                    >
-                      <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                      <XAxis
-                        dataKey="x"
-                        type="number"
-                        scale="time"
-                        domain={[
-                          chartWindow.displayStartMs,
-                          chartWindow.displayEndMs,
-                        ]}
-                        ticks={chartTicks}
-                        padding={{ left: 0, right: 0 }}
-                        height={48}
-                        interval={0}
-                        minTickGap={0}
-                        tickMargin={8}
-                        tick={(props) => (
-                          <GlucoseXAxisTick
-                            {...props}
-                            startMs={chartWindow.displayStartMs}
-                            endMs={chartWindow.displayEndMs}
-                            tickFormatter={formatChartTick}
-                          />
-                        )}
-                        allowDataOverflow={false}
-                      />
-                      <YAxis
-                        yAxisId="glucose"
-                        type="number"
-                        domain={[1, 19]}
-                        ticks={GLUCOSE_GRID_TICKS}
-                        width={chartWidth <= 430 ? 18 : 28}
-                        interval={0}
-                        axisLine={false}
-                        tickLine={false}
-                        tick={<GlucoseYAxisTick />}
-                        tickMargin={6}
-                        allowDataOverflow
-                      />
-                      <ReferenceLine
-                        yAxisId="glucose"
-                        y={5.5}
-                        stroke="#111827"
-                        strokeWidth={1.5}
-                        strokeOpacity={0.3}
-                      />
-                      <ReferenceLine
-                        yAxisId="glucose"
-                        y={9}
-                        stroke="#111827"
-                        strokeWidth={1.5}
-                        strokeOpacity={0.3}
-                      />
-                      <ReferenceLine
-                        yAxisId="glucose"
-                        y={3.9}
-                        stroke="#111827"
-                        strokeWidth={2.25}
-                        strokeOpacity={0.45}
-                      />
-                      <ReferenceLine
-                        yAxisId="glucose"
-                        y={11.1}
-                        stroke="#111827"
-                        strokeWidth={2.25}
-                        strokeOpacity={0.45}
-                      />
-
-                      {glucoseLineSegments.gapSegments.map((segment, index) => (
-                        <Line
-                          key={`glucose-gap-${index}`}
-                          yAxisId="glucose"
-                          name="Glucose gap"
-                          type="linear"
-                          data={segment}
-                          dataKey="glucose"
-                          stroke="#1e5f8f"
-                          strokeWidth={2}
-                          strokeDasharray="7 7"
-                          strokeOpacity={0.35}
-                          dot={false}
-                          activeDot={false}
-                          isAnimationActive={false}
+                  <ComposedChart
+                    width={chartWidth}
+                    height={chartHeight}
+                    data={visualChartData}
+                    margin={
+                      chartWidth <= 430
+                        ? { top: 12, right: 0, left: 6, bottom: 12 }
+                        : { top: 18, right: 0, left: 0, bottom: 34 }
+                    }
+                  >
+                    <CartesianGrid vertical={false} strokeDasharray="2 4" />
+                    <XAxis
+                      dataKey="x"
+                      type="number"
+                      scale="time"
+                      domain={[
+                        chartWindow.displayStartMs,
+                        chartWindow.displayEndMs,
+                      ]}
+                      ticks={chartTicks}
+                      padding={{ left: 0, right: 0 }}
+                      height={48}
+                      interval={0}
+                      minTickGap={0}
+                      tickMargin={8}
+                      tick={(props) => (
+                        <GlucoseXAxisTick
+                          {...props}
+                          startMs={chartWindow.displayStartMs}
+                          endMs={chartWindow.displayEndMs}
+                          tickFormatter={formatChartTick}
                         />
-                      ))}
+                      )}
+                      allowDataOverflow={false}
+                    />
+                    <YAxis
+                      yAxisId="glucose"
+                      type="number"
+                      domain={[1, 19]}
+                      ticks={GLUCOSE_GRID_TICKS}
+                      width={chartWidth <= 430 ? 18 : 28}
+                      interval={0}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={<GlucoseYAxisTick />}
+                      tickMargin={6}
+                      allowDataOverflow
+                    />
+                    <ReferenceLine
+                      yAxisId="glucose"
+                      y={5.5}
+                      stroke="#111827"
+                      strokeWidth={1.5}
+                      strokeOpacity={0.3}
+                    />
+                    <ReferenceLine
+                      yAxisId="glucose"
+                      y={9}
+                      stroke="#111827"
+                      strokeWidth={1.5}
+                      strokeOpacity={0.3}
+                    />
+                    <ReferenceLine
+                      yAxisId="glucose"
+                      y={3.9}
+                      stroke="#111827"
+                      strokeWidth={2.25}
+                      strokeOpacity={0.45}
+                    />
+                    <ReferenceLine
+                      yAxisId="glucose"
+                      y={11.1}
+                      stroke="#111827"
+                      strokeWidth={2.25}
+                      strokeOpacity={0.45}
+                    />
 
-                      {glucoseLineSegments.coloredSegments.map((segment) => (
-                        <Line
-                          key={segment.id}
-                          yAxisId="glucose"
-                          name="Glucose"
-                          type="monotone"
-                          data={segment.data}
-                          dataKey="glucose"
-                          stroke={segment.color}
-                          strokeWidth={4}
-                          dot={false}
-                          activeDot={false}
-                          isAnimationActive={false}
-                        />
-                      ))}
+                    {glucoseLineSegments.gapSegments.map((segment, index) => (
+                      <Line
+                        key={`glucose-gap-${index}`}
+                        yAxisId="glucose"
+                        name="Glucose gap"
+                        type="linear"
+                        data={segment}
+                        dataKey="glucose"
+                        stroke="#1e5f8f"
+                        strokeWidth={2}
+                        strokeDasharray="7 7"
+                        strokeOpacity={0.35}
+                        dot={false}
+                        activeDot={false}
+                        isAnimationActive={false}
+                      />
+                    ))}
 
-                      {shouldRenderGlucoseScatter ? (
-                        <Scatter
-                          yAxisId="glucose"
-                          data={visualChartData}
-                          dataKey="glucose"
-                          shape={(props) => (
-                            <ClickableGlucosePoint
-                              {...props}
-                              onSelect={(reading) =>
-                                setSelectedChartItem({
-                                  type: "reading",
-                                  data: reading,
-                                })
-                              }
-                              selectedReadingId={selectedReadingId}
-                            />
-                          )}
-                        />
-                      ) : null}
+                    {glucoseLineSegments.coloredSegments.map((segment) => (
+                      <Line
+                        key={segment.id}
+                        yAxisId="glucose"
+                        name="Glucose"
+                        type="monotone"
+                        data={segment.data}
+                        dataKey="glucose"
+                        stroke={segment.color}
+                        strokeWidth={4}
+                        dot={false}
+                        activeDot={false}
+                        isAnimationActive={false}
+                      />
+                    ))}
 
+                    {shouldRenderGlucoseScatter ? (
                       <Scatter
                         yAxisId="glucose"
-                        data={eventChartPoints}
-                        dataKey="eventDotY"
+                        data={visualChartData}
+                        dataKey="glucose"
                         shape={(props) => (
-                          <ChartEventDot
+                          <ClickableGlucosePoint
                             {...props}
-                            onSelect={(event) =>
+                            onSelect={(reading) =>
                               setSelectedChartItem({
-                                type: "event",
-                                data: event,
+                                type: "reading",
+                                data: reading,
                               })
                             }
-                            selectedEventId={selectedEventId}
+                            selectedReadingId={selectedReadingId}
                           />
                         )}
                       />
-                    </ComposedChart>
+                    ) : null}
+
+                    <Scatter
+                      yAxisId="glucose"
+                      data={eventChartPoints}
+                      dataKey="eventDotY"
+                      shape={(props) => (
+                        <ChartEventDot
+                          {...props}
+                          onSelect={(event) =>
+                            setSelectedChartItem({
+                              type: "event",
+                              data: event,
+                            })
+                          }
+                          selectedEventId={selectedEventId}
+                        />
+                      )}
+                    />
+                  </ComposedChart>
                 ) : null}
               </div>
             </div>
