@@ -725,6 +725,8 @@ th {
   font-weight: 800;
 }
 
+.event-form input,
+.event-form select,
 .event-form textarea {
   width: 100%;
   border: 1px solid rgba(84, 105, 130, 0.22);
@@ -732,7 +734,120 @@ th {
   padding: 12px 14px;
   color: #152033;
   background: #fff;
+}
+
+.event-form select,
+.event-form input {
+  min-height: 52px;
+}
+
+.event-form textarea {
   resize: vertical;
+}
+
+.event-edit-modal {
+  color-scheme: light;
+}
+
+.event-edit-modal select,
+.event-edit-modal input,
+.event-edit-modal textarea {
+  border: 1px solid rgba(21, 32, 51, 0.14);
+  border-radius: 18px;
+  background: #ffffff;
+  color: #152033;
+  padding: 14px 16px;
+  font: inherit;
+  font-weight: 700;
+  color-scheme: light;
+  appearance: auto;
+  -webkit-appearance: none;
+}
+
+.event-edit-modal select,
+.event-edit-modal input {
+  min-height: 52px;
+}
+
+.event-edit-modal select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, #52677f 50%),
+    linear-gradient(135deg, #52677f 50%, transparent 50%);
+  background-position:
+    calc(100% - 22px) calc(50% - 3px),
+    calc(100% - 16px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 40px;
+}
+
+.event-edit-datetime-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+  width: 100%;
+}
+
+.event-edit-field {
+  min-width: 0;
+}
+
+.event-edit-field input,
+.event-edit-field select,
+.event-edit-field textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.event-edit-field span {
+  color: #52677f;
+  font-weight: 800;
+}
+
+.event-edit-amount-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid rgba(21, 32, 51, 0.14);
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 0 14px 0 16px;
+  box-sizing: border-box;
+}
+
+.event-edit-amount-control input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 50px;
+  border: 0;
+  border-radius: 0;
+  padding: 14px 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.event-edit-amount-control span {
+  color: #52677f;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.event-edit-modal input[type="date"]::-webkit-date-and-time-value,
+.event-edit-modal input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+  color: #152033;
+}
+
+.event-edit-modal input[type="date"]::-webkit-calendar-picker-indicator,
+.event-edit-modal input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.8;
 }
 
 .event-form-actions {
@@ -1096,8 +1211,6 @@ th {
 
 .export-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
   margin-top: 4px;
 }
 
@@ -1510,19 +1623,66 @@ th {
   }
 
   .mobile-chart-log-item {
-    grid-template-columns: 72px minmax(0, 1fr);
-    gap: 10px;
-    align-items: start;
     padding: 10px 12px;
+    cursor: pointer;
+    touch-action: manipulation;
   }
 
-  .mobile-chart-log-item .log-event-main {
-    flex-wrap: wrap;
-    row-gap: 6px;
+  .mobile-event-grid {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    row-gap: 8px;
+    align-items: center;
+    width: 100%;
   }
 
-  .mobile-chart-log-item .log-event-title {
+  .mobile-event-time {
+    grid-column: 1;
+    grid-row: 1;
+    text-align: left;
+  }
+
+  .mobile-event-time strong {
+    display: block;
+  }
+
+  .mobile-event-type {
+    grid-column: 2;
+    grid-row: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .mobile-event-type .log-event-title {
     white-space: normal;
+  }
+
+  .mobile-event-amount {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .mobile-event-notes {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    text-align: left;
+    line-height: 1.35;
+    color: #52677f;
+    overflow-wrap: anywhere;
+  }
+
+  .event-value-pill {
+    white-space: nowrap;
   }
 
   .chart-event-marker {
