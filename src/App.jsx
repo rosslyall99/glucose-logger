@@ -494,14 +494,13 @@ function EventModal({
   existingEvent = null,
   onClose,
   onSaved,
+  onDelete,
+  isDeleting = false,
 }) {
   const isEditing = Boolean(existingEvent);
   const initialLoggedAt = existingEvent
     ? new Date(existingEvent.logged_at)
     : new Date();
-  const [selectedEventType, setSelectedEventType] = useState(
-    existingEvent?.event_type || eventType,
-  );
   const [amount, setAmount] = useState(
     existingEvent?.amount !== null && existingEvent?.amount !== undefined
       ? String(existingEvent.amount)
@@ -517,12 +516,12 @@ function EventModal({
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const config = EVENT_CONFIG[selectedEventType] || EVENT_CONFIG.note;
-  const isNote = selectedEventType === "note";
+  const resolvedEventType = existingEvent?.event_type || eventType;
+  const config = EVENT_CONFIG[resolvedEventType] || EVENT_CONFIG.note;
+  const isNote = resolvedEventType === "note";
 
   useEffect(() => {
     const nextLoggedAt = existingEvent ? new Date(existingEvent.logged_at) : new Date();
-    setSelectedEventType(existingEvent?.event_type || eventType);
     setAmount(
       existingEvent?.amount !== null && existingEvent?.amount !== undefined
         ? String(existingEvent.amount)
@@ -542,12 +541,6 @@ function EventModal({
 
     const parsedAmount = isNote ? null : numberOrNull(amount);
     const trimmedNotes = notes.trim() || null;
-
-    if (!selectedEventType) {
-      setErrorMessage("Choose an event type before saving.");
-      setIsSaving(false);
-      return;
-    }
 
     if (isEditing && (!loggedDate || !loggedTime)) {
       setErrorMessage("Choose both a date and time before saving.");
@@ -578,7 +571,7 @@ function EventModal({
     }
 
     const eventPayload = {
-      event_type: selectedEventType,
+      event_type: resolvedEventType,
       amount: parsedAmount,
       unit: config.unit || null,
       notes: trimmedNotes,
@@ -614,6 +607,11 @@ function EventModal({
     onClose();
   }
 
+  async function handleDeleteClick() {
+    if (!existingEvent || !onDelete) return;
+    await onDelete(existingEvent);
+  }
+
   return (
     <div className="modal-backdrop">
       <section
@@ -627,22 +625,6 @@ function EventModal({
         <h2>{isEditing ? "Edit event" : config.label}</h2>
 
         <form className="event-form" onSubmit={handleSubmit}>
-          {isEditing ? (
-            <label>
-              Event type
-              <select
-                value={selectedEventType}
-                onChange={(event) => setSelectedEventType(event.target.value)}
-              >
-                {Object.entries(EVENT_CONFIG).map(([value, optionConfig]) => (
-                  <option key={value} value={value}>
-                    {optionConfig.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-
           {!isNote ? (
             <label>
               {config.amountLabel}
@@ -708,18 +690,28 @@ function EventModal({
           {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
 
           <div className="event-form-actions">
+            {isEditing ? (
+              <button
+                type="button"
+                className="small-action-button danger-action-button"
+                onClick={handleDeleteClick}
+                disabled={isSaving || isDeleting}
+              >
+                {isDeleting ? "Deleting..." : "Delete event"}
+              </button>
+            ) : null}
             <button
               type="button"
               className="secondary-button"
               onClick={onClose}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
             >
               Cancel
             </button>
             <button
               type="submit"
               className="refresh-button"
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
             >
               {isSaving
                 ? "Saving..."
@@ -1954,6 +1946,14 @@ function Dashboard({ session }) {
     setEditingEvent(event);
   }
 
+  async function handleDeleteEventFromModal(event) {
+    const didDelete = await handleDeleteEvent(event);
+
+    if (didDelete) {
+      setEditingEvent(null);
+    }
+  }
+
   async function handleSavedEventEdit(updatedEvent) {
     if (!updatedEvent) {
       await loadEvents();
@@ -2071,7 +2071,7 @@ function Dashboard({ session }) {
       )}?`,
     );
 
-    if (!confirmed) return;
+    if (!confirmed) return false;
 
     setDeletingEventId(event.id);
 
@@ -2083,6 +2083,8 @@ function Dashboard({ session }) {
 
     if (error) {
       setErrorMessage(error.message);
+      setDeletingEventId(null);
+      return false;
     } else {
       if (
         selectedChartItem?.type === "event" &&
@@ -2095,6 +2097,7 @@ function Dashboard({ session }) {
     }
 
     setDeletingEventId(null);
+    return true;
   }
 
   useEffect(() => {
@@ -3222,6 +3225,8 @@ function Dashboard({ session }) {
           existingEvent={editingEvent}
           onClose={() => setEditingEvent(null)}
           onSaved={handleSavedEventEdit}
+          onDelete={handleDeleteEventFromModal}
+          isDeleting={deletingEventId === editingEvent.id}
         />
       ) : null}
     </main>
