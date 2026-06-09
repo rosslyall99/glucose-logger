@@ -1024,8 +1024,7 @@ function InsightsPanelStage1B({
   events,
   isLoadingReadings,
   isLoadingEvents,
-  onExportReadings,
-  onExportEvents,
+  onExportCombinedData,
   exportState,
   exportErrorMessage,
   dataPeriodPreset,
@@ -1177,70 +1176,59 @@ function InsightsPanelStage1B({
       });
 
       if (blockReadings.length === 0) {
-        return `- ${block.label}: no readings recorded, so not enough data to draw a conclusion.`;
+        return `- ${block.label}: no readings.`;
       }
 
       const summary = summarizeReadings(blockReadings);
-      const highs = blockReadings.filter(
-        (reading) => Number(reading.glucose_value) > 11.1,
-      ).length;
-      const lows = blockReadings.filter(
-        (reading) => Number(reading.glucose_value) < 3.9,
-      ).length;
-
-      return `- ${block.label}: ${summary.count} readings, average ${formatGlucoseValue(summary.average)}, min ${formatGlucoseValue(summary.min)}, max ${formatGlucoseValue(summary.max)}, trend ${getTrend(blockReadings)}, highs above 11.1: ${highs}, lows below 3.9: ${lows}.`;
+      return `- ${block.label}: ${summary.count} readings, avg ${formatGlucoseValue(summary.average)}, min/max ${formatGlucoseValue(summary.min)}/${formatGlucoseValue(summary.max)}, ${getTrend(blockReadings)}.`;
     });
 
     const eventLines =
       sortedEvents.length > 0
         ? sortedEvents.map((event) => {
             const config = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.note;
-            const amount = formatEventAmount(event) || "No amount";
-            const notes = event.notes ? ` | Notes: ${event.notes}` : "";
-            return `- ${formatTime(event.logged_at)} | ${config.label} | ${amount}${notes}`;
+            const amount = formatEventAmount(event);
+            const notes = event.notes ? ` - ${event.notes}` : "";
+            return `- ${formatTime(event.logged_at)} ${config.label}${amount ? ` ${amount}` : ""}${notes}`;
           })
-        : ["- No manual events recorded today."];
+        : ["- None recorded."];
 
     const sampledReadingLines =
       sortedReadings.length > 0
-        ? sampleReadings(sortedReadings, 30).map(
+        ? sampleReadings(sortedReadings, 60).map(
             (reading) =>
-              `- ${formatTime(reading.reading_time)}: ${formatGlucoseValue(reading.glucose_value)} ${reading.unit || "mmol/l"}`,
+              `- ${formatTime(reading.reading_time)} ${formatGlucoseValue(reading.glucose_value)} ${reading.unit || "mmol/l"}`,
           )
-        : ["- No glucose readings recorded today."];
+        : ["- None recorded."];
 
     return [
-      "This is for personal pattern spotting only. Do not give medical advice, diagnosis, or insulin dosing recommendations.",
+      "Personal pattern spotting only. Please keep the response concise. Do not give medical advice, diagnosis, or insulin dosing recommendations.",
       "Do not recommend insulin dose changes.",
-      "Do not tell me to increase/decrease insulin.",
-      "Do not diagnose.",
-      "Use cautious wording such as: may be worth reviewing, could be useful to compare, a pattern to discuss, or not enough data to draw a conclusion.",
+      "Use cautious wording such as may be worth reviewing, could be useful to compare, or not enough data to draw a conclusion.",
       "",
-      "Please analyse this day of glucose and manual event data.",
-      "1. Summarise the day.",
-      "2. Describe glucose patterns through the day.",
-      "3. Identify periods of higher readings.",
-      "4. Identify periods of lower readings.",
-      "5. Compare readings before/after manual events where possible.",
-      "6. Point out data gaps.",
-      "7. Suggest things worth noting or discussing using cautious wording only.",
+      "Please analyse this glucose and manual event summary and return:",
+      "1. Brief day summary",
+      "2. Main glucose patterns",
+      "3. Notable higher/lower periods",
+      "4. Event timing observations where possible",
+      "5. Data gaps",
+      "6. Cautious discussion points",
       "",
-      `Selected period: ${dataPeriodLabel}`,
+      `Period: ${dataPeriodLabel}`,
       `Date: ${formatPromptDate(dateReference)}`,
-      `Total readings: ${overallSummary.count}`,
-      `Average glucose: ${overallSummary.average === null ? "No data" : formatGlucoseValue(overallSummary.average)}`,
-      `Highest reading: ${highestReading ? `${formatGlucoseValue(highestReading.glucose_value)} ${highestReading.unit || "mmol/l"} at ${formatTime(highestReading.reading_time)}` : "No data"}`,
-      `Lowest reading: ${lowestReading ? `${formatGlucoseValue(lowestReading.glucose_value)} ${lowestReading.unit || "mmol/l"} at ${formatTime(lowestReading.reading_time)}` : "No data"}`,
-      `Count above 11.1: ${aboveRangeCount}`,
-      `Count below 3.9: ${belowRangeCount}`,
+      `Readings: ${overallSummary.count}`,
+      `Average: ${overallSummary.average === null ? "No data" : formatGlucoseValue(overallSummary.average)}`,
+      `High/low: ${highestReading ? `${formatGlucoseValue(highestReading.glucose_value)} ${highestReading.unit || "mmol/l"} at ${formatTime(highestReading.reading_time)}` : "No data"} / ${lowestReading ? `${formatGlucoseValue(lowestReading.glucose_value)} ${lowestReading.unit || "mmol/l"} at ${formatTime(lowestReading.reading_time)}` : "No data"}`,
+      `Above 11.1: ${aboveRangeCount}`,
+      `Below 3.9: ${belowRangeCount}`,
       "",
-      "Time block summaries:",
+      "Time blocks:",
       ...timeBlockLines,
       "",
-      "Chronological manual events:",
+      "Manual events:",
       ...eventLines,
       "",
-      "Condensed glucose reading summary (sampled at about 30 minute intervals):",
+      "Glucose samples, about hourly:",
       ...sampledReadingLines,
     ].join("\n");
   };
@@ -1389,31 +1377,15 @@ function InsightsPanelStage1B({
           <button
             type="button"
             className="refresh-button"
-            onClick={onExportReadings}
+            onClick={onExportCombinedData}
             disabled={
-              exportState === "readings" ||
-              exportState === "events" ||
+              exportState === "combined" ||
               Boolean(dataPeriodError)
             }
           >
-            {exportState === "readings"
-              ? "Preparing glucose CSV..."
-              : "Download glucose readings CSV"}
-          </button>
-
-          <button
-            type="button"
-            className="refresh-button"
-            onClick={onExportEvents}
-            disabled={
-              exportState === "readings" ||
-              exportState === "events" ||
-              Boolean(dataPeriodError)
-            }
-          >
-            {exportState === "events"
-              ? "Preparing events CSV..."
-              : "Download manual events CSV"}
+            {exportState === "combined"
+              ? "Preparing combined CSV..."
+              : "Download glucose + events CSV"}
           </button>
         </div>
 
@@ -1803,7 +1775,7 @@ function Dashboard({ session }) {
     await supabase.auth.signOut();
   }
 
-  async function handleExportReadings() {
+  async function handleExportCombinedData() {
     const nextDataPeriod = getDataPeriodConfig(
       dataPeriodPreset,
       customStartDate,
@@ -1814,83 +1786,60 @@ function Dashboard({ session }) {
       return;
     }
 
-    setExportState("readings");
+    setExportState("combined");
     setExportErrorMessage("");
 
     try {
-      const exportRows = [...dataPeriodReadings]
-        .sort((a, b) => new Date(a.reading_time) - new Date(b.reading_time))
-        .map(({ reading_time, glucose_value, unit, created_at }) => ({
-          reading_time,
+      const glucoseRows = dataPeriodReadings.map(
+        ({ reading_time, glucose_value, unit, created_at }) => ({
+          record_type: "glucose",
+          time: reading_time,
           glucose_value,
-          unit,
+          glucose_unit: unit,
+          event_type: "",
+          event_label: "",
+          amount: "",
+          amount_unit: "",
+          notes: "",
           created_at,
-        }));
-      const csvContent = buildCsv(exportRows, [
-        "reading_time",
-        "glucose_value",
-        "unit",
-        "created_at",
-      ]);
-
-      downloadCsvFile(
-        `range-glucose-readings-${nextDataPeriod.filenameLabel}.csv`,
-        csvContent,
+        }),
       );
-    } catch (error) {
-      setExportErrorMessage(error.message || "Could not export readings.");
-    } finally {
-      setExportState("");
-    }
-  }
-
-  async function handleExportEvents() {
-    const nextDataPeriod = getDataPeriodConfig(
-      dataPeriodPreset,
-      customStartDate,
-      customEndDate,
-    );
-    if (nextDataPeriod.error) {
-      setExportErrorMessage(nextDataPeriod.error);
-      return;
-    }
-
-    setExportState("events");
-    setExportErrorMessage("");
-
-    try {
-      const exportRows = events
-        .filter((event) => {
-          const eventTime = new Date(event.logged_at).getTime();
-          return (
-            eventTime >= nextDataPeriod.start.getTime() &&
-            eventTime < nextDataPeriod.end.getTime()
-          );
-        })
-        .sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at))
-        .map(({ logged_at, event_type, amount, unit, notes, created_at }) => ({
-          logged_at,
+      const eventRows = dataPeriodEvents.map(
+        ({ logged_at, event_type, amount, unit, notes, created_at }) => ({
+          record_type: "event",
+          time: logged_at,
+          glucose_value: "",
+          glucose_unit: "",
           event_type,
-          amount,
-          unit,
-          notes,
+          event_label: EVENT_CONFIG[event_type]?.label || event_type,
+          amount: amount ?? "",
+          amount_unit: unit || "",
+          notes: notes || "",
           created_at,
-        }));
-      const csvContent = buildCsv(exportRows, [
-        "logged_at",
+        }),
+      );
+      const combinedRows = [...glucoseRows, ...eventRows].sort(
+        (a, b) => new Date(a.time) - new Date(b.time),
+      );
+      const csvContent = buildCsv(combinedRows, [
+        "record_type",
+        "time",
+        "glucose_value",
+        "glucose_unit",
         "event_type",
+        "event_label",
         "amount",
-        "unit",
+        "amount_unit",
         "notes",
         "created_at",
       ]);
 
       downloadCsvFile(
-        `range-treatment-events-${nextDataPeriod.filenameLabel}.csv`,
+        `range-glucose-events-${nextDataPeriod.filenameLabel}.csv`,
         csvContent,
       );
     } catch (error) {
-      setExportErrorMessage(error.message || "Could not export manual events.");
+      setExportErrorMessage(error.message || "Could not export combined data.");
     } finally {
       setExportState("");
     }
@@ -2987,8 +2936,7 @@ function Dashboard({ session }) {
           events={dataPeriodEvents}
           isLoadingReadings={isLoadingDataPeriodReadings}
           isLoadingEvents={isLoadingEvents}
-          onExportReadings={handleExportReadings}
-          onExportEvents={handleExportEvents}
+          onExportCombinedData={handleExportCombinedData}
           exportState={exportState}
           exportErrorMessage={exportErrorMessage}
           dataPeriodPreset={dataPeriodPreset}
