@@ -91,6 +91,12 @@ function formatDateInputValue(date) {
   return `${year}-${month}-${day}`;
 }
 
+function formatTimeInputValue(date) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 function parseLocalDateInput(value) {
   if (!value) return null;
 
@@ -489,18 +495,44 @@ function EventModal({
   onClose,
   onSaved,
 }) {
-  const config = EVENT_CONFIG[eventType];
   const isEditing = Boolean(existingEvent);
+  const initialLoggedAt = existingEvent
+    ? new Date(existingEvent.logged_at)
+    : new Date();
+  const [selectedEventType, setSelectedEventType] = useState(
+    existingEvent?.event_type || eventType,
+  );
   const [amount, setAmount] = useState(
     existingEvent?.amount !== null && existingEvent?.amount !== undefined
       ? String(existingEvent.amount)
       : "",
   );
   const [notes, setNotes] = useState(existingEvent?.notes || "");
+  const [loggedDate, setLoggedDate] = useState(
+    formatDateInputValue(initialLoggedAt),
+  );
+  const [loggedTime, setLoggedTime] = useState(
+    formatTimeInputValue(initialLoggedAt),
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const isNote = eventType === "note";
+  const config = EVENT_CONFIG[selectedEventType] || EVENT_CONFIG.note;
+  const isNote = selectedEventType === "note";
+
+  useEffect(() => {
+    const nextLoggedAt = existingEvent ? new Date(existingEvent.logged_at) : new Date();
+    setSelectedEventType(existingEvent?.event_type || eventType);
+    setAmount(
+      existingEvent?.amount !== null && existingEvent?.amount !== undefined
+        ? String(existingEvent.amount)
+        : "",
+    );
+    setNotes(existingEvent?.notes || "");
+    setLoggedDate(formatDateInputValue(nextLoggedAt));
+    setLoggedTime(formatTimeInputValue(nextLoggedAt));
+    setErrorMessage("");
+  }, [eventType, existingEvent]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -510,6 +542,18 @@ function EventModal({
 
     const parsedAmount = isNote ? null : numberOrNull(amount);
     const trimmedNotes = notes.trim() || null;
+
+    if (!selectedEventType) {
+      setErrorMessage("Choose an event type before saving.");
+      setIsSaving(false);
+      return;
+    }
+
+    if (isEditing && (!loggedDate || !loggedTime)) {
+      setErrorMessage("Choose both a date and time before saving.");
+      setIsSaving(false);
+      return;
+    }
 
     if (!isNote && parsedAmount === null) {
       setErrorMessage("Enter a value before saving.");
@@ -523,11 +567,22 @@ function EventModal({
       return;
     }
 
+    const loggedAt = isEditing
+      ? new Date(`${loggedDate}T${loggedTime}:00`)
+      : new Date();
+
+    if (Number.isNaN(loggedAt.getTime())) {
+      setErrorMessage("Enter a valid date and time before saving.");
+      setIsSaving(false);
+      return;
+    }
+
     const eventPayload = {
-      event_type: eventType,
+      event_type: selectedEventType,
       amount: parsedAmount,
       unit: config.unit || null,
       notes: trimmedNotes,
+      ...(isEditing ? { logged_at: loggedAt.toISOString() } : {}),
     };
 
     const { error } = existingEvent
@@ -548,7 +603,14 @@ function EventModal({
       return;
     }
 
-    await onSaved();
+    const savedEvent = existingEvent
+      ? {
+          ...existingEvent,
+          ...eventPayload,
+        }
+      : null;
+
+    await onSaved?.(savedEvent);
     onClose();
   }
 
@@ -559,10 +621,26 @@ function EventModal({
           ×
         </button>
 
-        <p className="eyebrow">{isEditing ? "Edit event" : "Record event"}</p>
-        <h2>{config.label}</h2>
+        <p className="eyebrow">{isEditing ? config.label : "Record event"}</p>
+        <h2>{isEditing ? "Edit event" : config.label}</h2>
 
         <form className="event-form" onSubmit={handleSubmit}>
+          {isEditing ? (
+            <label>
+              Event type
+              <select
+                value={selectedEventType}
+                onChange={(event) => setSelectedEventType(event.target.value)}
+              >
+                {Object.entries(EVENT_CONFIG).map(([value, optionConfig]) => (
+                  <option key={value} value={value}>
+                    {optionConfig.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
           {!isNote ? (
             <label>
               {config.amountLabel}
@@ -580,6 +658,28 @@ function EventModal({
                 <span>{config.unit}</span>
               </div>
             </label>
+          ) : null}
+
+          {isEditing ? (
+            <>
+              <label>
+                Logged date
+                <input
+                  type="date"
+                  value={loggedDate}
+                  onChange={(event) => setLoggedDate(event.target.value)}
+                />
+              </label>
+
+              <label>
+                Logged time
+                <input
+                  type="time"
+                  value={loggedTime}
+                  onChange={(event) => setLoggedTime(event.target.value)}
+                />
+              </label>
+            </>
           ) : null}
 
           <label>
@@ -762,7 +862,56 @@ function TodayEventsList({
   );
 }
 
-function MobileChartEventsList({ events, isLoading }) {
+function MobileChartEventsList({
+  events,
+  isLoading,
+  onSelect,
+  onEdit,
+  selectedEventId,
+}) {
+  const longPressTimerRef = useRef(null);
+  const longPressTriggeredRef = useRef(false);
+
+  const clearLongPressTimer = () => {
+    window.clearTimeout(longPressTimerRef.current);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer();
+    };
+  }, []);
+
+  const getLongPressHandlers = (eventItem) => ({
+    onPointerDown: () => {
+      longPressTriggeredRef.current = false;
+      clearLongPressTimer();
+      longPressTimerRef.current = window.setTimeout(() => {
+        longPressTriggeredRef.current = true;
+        onEdit?.(eventItem);
+      }, 550);
+    },
+    onPointerUp: () => {
+      clearLongPressTimer();
+    },
+    onPointerLeave: () => {
+      clearLongPressTimer();
+    },
+    onPointerCancel: () => {
+      clearLongPressTimer();
+    },
+    onClick: (clickEvent) => {
+      if (longPressTriggeredRef.current) {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+        longPressTriggeredRef.current = false;
+        return;
+      }
+
+      onSelect?.(eventItem);
+    },
+  });
+
   return (
     <section className="table-card recorded-events-card mobile-chart-events-card">
       <div className="section-heading">
@@ -785,6 +934,16 @@ function MobileChartEventsList({ events, isLoading }) {
               <article
                 key={event.id}
                 className={`log-item mobile-chart-log-item ${config.className}`}
+                role="button"
+                tabIndex={0}
+                aria-pressed={selectedEventId === event.id}
+                onKeyDown={(eventKey) => {
+                  if (eventKey.key === "Enter" || eventKey.key === " ") {
+                    eventKey.preventDefault();
+                    onSelect?.(event);
+                  }
+                }}
+                {...getLongPressHandlers(event)}
               >
                 <div className="log-datetime">
                   <strong>{formatTime(event.logged_at)}</strong>
@@ -1637,6 +1796,9 @@ function Dashboard({ session }) {
   const [chartDayReadings, setChartDayReadings] = useState([]);
   const [isLoadingChartDayReadings, setIsLoadingChartDayReadings] =
     useState(false);
+  const [todayStatsReadings, setTodayStatsReadings] = useState([]);
+  const [isLoadingTodayStatsReadings, setIsLoadingTodayStatsReadings] =
+    useState(false);
   const [dataPeriodReadings, setDataPeriodReadings] = useState([]);
   const [events, setEvents] = useState([]);
   const [selectedChartItem, setSelectedChartItem] = useState(null);
@@ -1770,6 +1932,49 @@ function Dashboard({ session }) {
 
   async function handleSignOut() {
     await supabase.auth.signOut();
+  }
+
+  function openEditEventModal(event) {
+    setEditingEvent(event);
+  }
+
+  async function handleSavedEventEdit(updatedEvent) {
+    if (!updatedEvent) {
+      await loadEvents();
+      setLastUpdatedAt(new Date());
+      return;
+    }
+
+    setEvents((currentEvents) =>
+      currentEvents
+        .map((event) =>
+          event.id === updatedEvent.id ? { ...event, ...updatedEvent } : event,
+        )
+        .sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at)),
+    );
+    setSelectedChartItem((currentItem) => {
+      if (currentItem?.type !== "event" || currentItem.data.id !== updatedEvent.id) {
+        return currentItem;
+      }
+
+      const updatedEventTime = new Date(updatedEvent.logged_at).getTime();
+      const isInCurrentChartWindow =
+        updatedEventTime >= chartWindow.startMs &&
+        updatedEventTime <= chartWindow.endMs;
+
+      if (!isInCurrentChartWindow) {
+        return null;
+      }
+
+      return {
+        type: "event",
+        data: {
+          ...currentItem.data,
+          ...updatedEvent,
+        },
+      };
+    });
+    setLastUpdatedAt(new Date());
   }
 
   async function handleExportCombinedData() {
@@ -1925,13 +2130,7 @@ function Dashboard({ session }) {
   const latestReading = readings[0] || null;
   const status = getStatus(latestReading?.glucose_value);
 
-  const todayReadings = useMemo(() => {
-    const today = new Date().toDateString();
-
-    return readings.filter((reading) => {
-      return new Date(reading.reading_time).toDateString() === today;
-    });
-  }, [readings]);
+  const todayReadings = todayStatsReadings;
 
   const todayAverage = useMemo(() => {
     if (todayReadings.length === 0) return null;
@@ -1981,6 +2180,43 @@ function Dashboard({ session }) {
     end.setDate(end.getDate() + 1);
     return end;
   }, [selectedDayStart]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function syncTodayStatsReadings() {
+      setIsLoadingTodayStatsReadings(true);
+
+      const todayStart = startOfLocalDay(new Date());
+      const tomorrowStart = addDays(todayStart, 1);
+
+      try {
+        const data = await fetchAllGlucoseReadings(
+          todayStart.toISOString(),
+          tomorrowStart.toISOString(),
+        );
+
+        if (!isCurrent) return;
+
+        setTodayStatsReadings(data || []);
+      } catch (error) {
+        if (!isCurrent) return;
+
+        setErrorMessage(error.message);
+        setTodayStatsReadings([]);
+      } finally {
+        if (isCurrent) {
+          setIsLoadingTodayStatsReadings(false);
+        }
+      }
+    }
+
+    syncTodayStatsReadings();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [lastUpdatedAt]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -2520,14 +2756,20 @@ function Dashboard({ session }) {
 
             <article className="stat-card">
               <span className="card-label">Today’s readings</span>
-              <strong>{todayReadings.length}</strong>
+              <strong>
+                {isLoadingTodayStatsReadings ? "Loading..." : todayReadings.length}
+              </strong>
               <p>Readings received today</p>
             </article>
 
             <article className="stat-card">
               <span className="card-label">Today’s average</span>
               <strong>
-                {todayAverage === null ? "—" : todayAverage.toFixed(1)}
+                {isLoadingTodayStatsReadings
+                  ? "Loading..."
+                  : todayAverage === null
+                    ? "—"
+                    : todayAverage.toFixed(1)}
               </strong>
               <p>Based on today’s readings</p>
             </article>
@@ -2811,6 +3053,13 @@ function Dashboard({ session }) {
                           </span>
                         ) : null}
                       </div>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => openEditEventModal(selectedChartEvent)}
+                      >
+                        Edit event
+                      </button>
                     </>
                   ) : (
                     <>
@@ -2838,6 +3087,14 @@ function Dashboard({ session }) {
           <MobileChartEventsList
             events={chartPeriodEvents}
             isLoading={isLoadingEvents}
+            onSelect={(event) =>
+              setSelectedChartItem({
+                type: "event",
+                data: event,
+              })
+            }
+            onEdit={openEditEventModal}
+            selectedEventId={selectedEventId}
           />
 
           <section className="table-card compact-readings-card">
@@ -2948,7 +3205,7 @@ function Dashboard({ session }) {
           userId={session.user.id}
           existingEvent={editingEvent}
           onClose={() => setEditingEvent(null)}
-          onSaved={loadEvents}
+          onSaved={handleSavedEventEdit}
         />
       ) : null}
     </main>
