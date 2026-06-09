@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import {
   CartesianGrid,
   ComposedChart,
@@ -95,6 +96,14 @@ function formatTimeInputValue(date) {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes}`;
+}
+
+function getLocalDateString(date) {
+  const localDate = new Date(date);
+  const year = localDate.getFullYear();
+  const month = String(localDate.getMonth() + 1).padStart(2, "0");
+  const day = String(localDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function parseLocalDateInput(value) {
@@ -228,6 +237,51 @@ function downloadCsvFile(filename, csvContent) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(objectUrl);
+}
+
+function downloadTextFile(filename, textContent) {
+  const blob = new Blob([textContent], { type: "text/plain;charset=utf-8;" });
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(objectUrl);
+}
+
+function getAiReviewSupabaseErrorMessage(error) {
+  const message = error?.message || "Something went wrong with AI reviews.";
+
+  if (message.includes("Could not find the table 'public.ai_daily_reviews'")) {
+    return "AI reviews are not set up in Supabase yet. Run docs/supabase-ai-daily-reviews.sql once, then refresh the app.";
+  }
+
+  return message;
+}
+
+function dedupeAiReviewsByDate(reviews) {
+  const latestByDate = new Map();
+
+  reviews.forEach((review) => {
+    const existingReview = latestByDate.get(review.review_date);
+    const existingTime = new Date(
+      existingReview?.updated_at || existingReview?.created_at || 0,
+    ).getTime();
+    const nextTime = new Date(
+      review.updated_at || review.created_at || 0,
+    ).getTime();
+
+    if (!existingReview || nextTime >= existingTime) {
+      latestByDate.set(review.review_date, review);
+    }
+  });
+
+  return [...latestByDate.values()].sort(
+    (a, b) => new Date(a.review_date) - new Date(b.review_date),
+  );
 }
 
 const GLUCOSE_GRID_TICKS = Array.from({ length: 18 }, (_, index) => index + 1);
@@ -488,6 +542,55 @@ function LoginScreen() {
   );
 }
 
+function AiReviewModal({ review, onClose }) {
+  if (!review) return null;
+
+  return (
+    <div className="modal-backdrop">
+      <section className="event-modal ai-review-modal">
+        <button type="button" className="modal-close" onClick={onClose}>
+          x
+        </button>
+
+        <p className="eyebrow">Saved AI review</p>
+        <h2>Saved AI review</h2>
+
+        <div className="ai-review-modal-content">
+          <p className="ai-review-modal-meta">
+            Review date: <strong>{review.review_date}</strong>
+          </p>
+          <p className="ai-review-modal-meta">
+            Last saved:{" "}
+            <strong>
+              {formatDateTime(review.updated_at || review.created_at)}
+            </strong>
+          </p>
+
+          <div className="ai-review-modal-block">
+            <strong>Review</strong>
+            <div className="saved-ai-review-markdown">
+              <ReactMarkdown>{review.response_text || ""}</ReactMarkdown>
+            </div>
+          </div>
+
+          {review.notes ? (
+            <div className="ai-review-modal-block">
+              <strong>Private notes</strong>
+              <p>{review.notes}</p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="event-form-actions">
+          <button type="button" className="secondary-button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function EventModal({
   eventType,
   userId,
@@ -521,7 +624,9 @@ function EventModal({
   const isNote = resolvedEventType === "note";
 
   useEffect(() => {
-    const nextLoggedAt = existingEvent ? new Date(existingEvent.logged_at) : new Date();
+    const nextLoggedAt = existingEvent
+      ? new Date(existingEvent.logged_at)
+      : new Date();
     setAmount(
       existingEvent?.amount !== null && existingEvent?.amount !== undefined
         ? String(existingEvent.amount)
@@ -614,9 +719,7 @@ function EventModal({
 
   return (
     <div className="modal-backdrop">
-      <section
-        className={`event-modal ${isEditing ? "event-edit-modal" : ""}`}
-      >
+      <section className={`event-modal ${isEditing ? "event-edit-modal" : ""}`}>
         <button type="button" className="modal-close" onClick={onClose}>
           ×
         </button>
@@ -630,9 +733,7 @@ function EventModal({
               {config.amountLabel}
               <div
                 className={
-                  isEditing
-                    ? "event-edit-amount-control"
-                    : "input-with-unit"
+                  isEditing ? "event-edit-amount-control" : "input-with-unit"
                 }
               >
                 <input
@@ -1187,6 +1288,7 @@ function InsightsPanel({
 }
 
 function InsightsPanelStage1B({
+  userId,
   readings,
   events,
   isLoadingReadings,
@@ -1201,10 +1303,24 @@ function InsightsPanelStage1B({
   onCustomStartDateChange,
   onCustomEndDateChange,
   dataPeriodLabel,
+  dataPeriodStart,
+  dataPeriodEnd,
   dataPeriodError,
 }) {
   const dataPageIsLoading = isLoadingReadings || isLoadingEvents;
   const [copyStatus, setCopyStatus] = useState("");
+  const [aiReviewText, setAiReviewText] = useState("");
+  const [aiReviewNotes, setAiReviewNotes] = useState("");
+  const [isSavingAiReview, setIsSavingAiReview] = useState(false);
+  const [aiReviewSaveMessage, setAiReviewSaveMessage] = useState("");
+  const [aiReviewError, setAiReviewError] = useState("");
+  const [savedAiReviewForDate, setSavedAiReviewForDate] = useState(null);
+  const [longTermReviewRange, setLongTermReviewRange] = useState("7");
+  const [isLoadingSavedReviews, setIsLoadingSavedReviews] = useState(false);
+  const [longTermPromptMessage, setLongTermPromptMessage] = useState("");
+  const [longTermPromptError, setLongTermPromptError] = useState("");
+  const [isViewingAiReview, setIsViewingAiReview] = useState(false);
+  const [isDeletingAiReview, setIsDeletingAiReview] = useState(false);
   const startDateInputRef = useRef(null);
   const endDateInputRef = useRef(null);
 
@@ -1400,9 +1516,332 @@ function InsightsPanelStage1B({
     ].join("\n");
   };
 
+  const dataPromptText = buildDataPrompt();
+
+  const selectedReviewDate = dataPeriodStart
+    ? getLocalDateString(dataPeriodStart)
+    : "";
+
+  const buildLongTermPrompt = ({
+    rangeDays,
+    rangeStart,
+    rangeEnd,
+    reviews,
+  }) => {
+    const formatCoveredDate = (value) =>
+      new Intl.DateTimeFormat("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(value);
+
+    return [
+      "Personal pattern spotting only. Do not give medical advice, diagnosis, or insulin dosing recommendations. Do not recommend insulin dose changes. Please review these saved daily glucose summaries and look only for repeated patterns, recurring time-of-day themes, possible repeated triggers, data gaps, and cautious points worth discussing.",
+      "",
+      `Period covered: last ${rangeDays} days (${formatCoveredDate(rangeStart)} to ${formatCoveredDate(rangeEnd)})`,
+      `Saved daily reviews: ${reviews.length}`,
+      "",
+      "Saved daily reviews:",
+      ...reviews.flatMap((review) => {
+        const notesLine = review.notes
+          ? [`Private notes: ${review.notes}`]
+          : [];
+        return [
+          `Date: ${review.review_date}`,
+          `Period: ${review.period_label}`,
+          "Review:",
+          review.response_text,
+          ...notesLine,
+          "",
+        ];
+      }),
+    ].join("\n");
+  };
+
+  async function loadAiReviewsForSelectedPeriod() {
+    if (!userId || !dataPeriodStart || !dataPeriodEnd || dataPeriodError) {
+      setSavedAiReviewForDate(null);
+      setIsLoadingSavedReviews(false);
+      return;
+    }
+
+    setIsLoadingSavedReviews(true);
+    setAiReviewError("");
+
+    const { data, error } = await supabase
+      .from("ai_daily_reviews")
+      .select(
+        "id, period_label, review_date, response_text, notes, created_at, updated_at, prompt_text",
+      )
+      .eq("user_id", userId)
+      .eq("review_date", selectedReviewDate)
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      setSavedAiReviewForDate(null);
+      setAiReviewError(getAiReviewSupabaseErrorMessage(error));
+    } else {
+      setSavedAiReviewForDate(data || null);
+    }
+
+    setIsLoadingSavedReviews(false);
+  }
+
+  async function handleSaveAiDailyReview() {
+    const trimmedResponse = aiReviewText.trim();
+    const trimmedNotes = aiReviewNotes.trim();
+
+    if (!trimmedResponse) {
+      setAiReviewSaveMessage("");
+      setAiReviewError("Paste an AI review response before saving.");
+      return;
+    }
+
+    if (!userId || !dataPeriodStart || !dataPeriodEnd || dataPeriodError) {
+      setAiReviewSaveMessage("");
+      setAiReviewError(
+        "Choose a valid data period before saving an AI review.",
+      );
+      return;
+    }
+
+    setIsSavingAiReview(true);
+    setAiReviewSaveMessage("");
+    setAiReviewError("");
+
+    const payload = {
+      user_id: userId,
+      review_date: selectedReviewDate,
+      period_label: dataPeriodLabel,
+      period_start: dataPeriodStart.toISOString(),
+      period_end: dataPeriodEnd.toISOString(),
+      prompt_text: dataPromptText || null,
+      response_text: trimmedResponse,
+      notes: trimmedNotes || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from("ai_daily_reviews")
+      .upsert(payload, { onConflict: "user_id,review_date" });
+
+    if (error) {
+      setAiReviewError(getAiReviewSupabaseErrorMessage(error));
+      setIsSavingAiReview(false);
+      return;
+    }
+
+    setAiReviewText("");
+    setAiReviewNotes("");
+    setAiReviewSaveMessage(
+      "AI review saved for this date. This replaces any previous review for the same date.",
+    );
+    setIsSavingAiReview(false);
+    await loadAiReviewsForSelectedPeriod();
+  }
+
+  async function handleDeleteAiReview() {
+    if (!savedAiReviewForDate || !userId) return;
+
+    const confirmed = window.confirm(
+      `Delete the saved AI review for ${savedAiReviewForDate.review_date}?`,
+    );
+
+    if (!confirmed) return;
+
+    setIsDeletingAiReview(true);
+    setAiReviewSaveMessage("");
+    setAiReviewError("");
+
+    const { error } = await supabase
+      .from("ai_daily_reviews")
+      .delete()
+      .eq("id", savedAiReviewForDate.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      setAiReviewError(getAiReviewSupabaseErrorMessage(error));
+      setIsDeletingAiReview(false);
+      return;
+    }
+
+    setSavedAiReviewForDate(null);
+    setIsViewingAiReview(false);
+    setAiReviewSaveMessage("Saved AI review deleted.");
+    setIsDeletingAiReview(false);
+  }
+
+  async function handleCopyLongTermAiPrompt() {
+    if (!userId) {
+      setLongTermPromptMessage("");
+      setLongTermPromptError(
+        "You need to be signed in to load saved AI reviews.",
+      );
+      return;
+    }
+
+    const rangeDays = Number(longTermReviewRange);
+    const rangeEnd = startOfLocalDay(addDays(new Date(), 1));
+    const rangeStart = startOfLocalDay(addDays(rangeEnd, -rangeDays));
+    const rangeStartDate = getLocalDateString(rangeStart);
+    const rangeEndDate = getLocalDateString(addDays(rangeEnd, -1));
+
+    setLongTermPromptMessage("");
+    setLongTermPromptError("");
+
+    const { data, error } = await supabase
+      .from("ai_daily_reviews")
+      .select(
+        "id, review_date, period_label, response_text, notes, created_at, updated_at",
+      )
+      .eq("user_id", userId)
+      .gte("review_date", rangeStartDate)
+      .lte("review_date", rangeEndDate)
+      .order("review_date", { ascending: true })
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      setLongTermPromptError(getAiReviewSupabaseErrorMessage(error));
+      return;
+    }
+
+    const reviews = dedupeAiReviewsByDate(data || []);
+    if (reviews.length === 0) {
+      setLongTermPromptError("No saved AI reviews found for this range yet.");
+      return;
+    }
+
+    const promptText = buildLongTermPrompt({
+      rangeDays,
+      rangeStart,
+      rangeEnd: addDays(rangeEnd, -1),
+      reviews,
+    });
+
+    try {
+      await navigator.clipboard.writeText(promptText);
+      setLongTermPromptMessage(
+        `Copied longer-term prompt with ${reviews.length} saved review${reviews.length === 1 ? "" : "s"}.`,
+      );
+    } catch {
+      setLongTermPromptError("Could not copy automatically. Please try again.");
+    }
+  }
+
+  async function handleDownloadLongTermAiReviews() {
+    if (!userId) {
+      setLongTermPromptMessage("");
+      setLongTermPromptError(
+        "You need to be signed in to load saved AI reviews.",
+      );
+      return;
+    }
+
+    const rangeDays = Number(longTermReviewRange);
+    const rangeEnd = startOfLocalDay(addDays(new Date(), 1));
+    const rangeStart = startOfLocalDay(addDays(rangeEnd, -rangeDays));
+    const rangeStartDate = getLocalDateString(rangeStart);
+    const rangeEndDate = getLocalDateString(addDays(rangeEnd, -1));
+
+    setLongTermPromptMessage("");
+    setLongTermPromptError("");
+
+    const { data, error } = await supabase
+      .from("ai_daily_reviews")
+      .select(
+        "id, review_date, period_label, response_text, notes, created_at, updated_at",
+      )
+      .eq("user_id", userId)
+      .gte("review_date", rangeStartDate)
+      .lte("review_date", rangeEndDate)
+      .order("review_date", { ascending: true })
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      setLongTermPromptError(getAiReviewSupabaseErrorMessage(error));
+      return;
+    }
+
+    const reviews = dedupeAiReviewsByDate(data || []);
+    if (reviews.length === 0) {
+      setLongTermPromptError("No saved AI reviews found for this range yet.");
+      return;
+    }
+
+    const promptText = buildLongTermPrompt({
+      rangeDays,
+      rangeStart,
+      rangeEnd: addDays(rangeEnd, -1),
+      reviews,
+    });
+
+    downloadTextFile(`range-ai-reviews-last-${rangeDays}-days.txt`, promptText);
+    setLongTermPromptMessage(
+      `Downloaded longer-term AI prompt with ${reviews.length} saved review${reviews.length === 1 ? "" : "s"}.`,
+    );
+  }
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function syncAiReviewsForSelectedPeriod() {
+      if (!userId || !dataPeriodStart || !dataPeriodEnd || dataPeriodError) {
+        if (!isCurrent) return;
+
+        setSavedAiReviewForDate(null);
+        setIsLoadingSavedReviews(false);
+        return;
+      }
+
+      setIsLoadingSavedReviews(true);
+      setAiReviewError("");
+
+      const { data, error } = await supabase
+        .from("ai_daily_reviews")
+        .select(
+          "id, period_label, review_date, response_text, notes, created_at, updated_at, prompt_text",
+        )
+        .eq("user_id", userId)
+        .eq("review_date", selectedReviewDate)
+        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!isCurrent) return;
+
+      if (error) {
+        setSavedAiReviewForDate(null);
+        setAiReviewError(getAiReviewSupabaseErrorMessage(error));
+      } else {
+        setSavedAiReviewForDate(data || null);
+      }
+
+      setIsLoadingSavedReviews(false);
+    }
+
+    syncAiReviewsForSelectedPeriod();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [
+    dataPeriodEnd,
+    dataPeriodError,
+    dataPeriodLabel,
+    dataPeriodStart,
+    selectedReviewDate,
+    userId,
+  ]);
+
   async function handleCopyPrompt() {
     try {
-      await navigator.clipboard.writeText(buildDataPrompt());
+      await navigator.clipboard.writeText(dataPromptText);
       setCopyStatus("success");
     } catch {
       setCopyStatus("error");
@@ -1504,6 +1943,32 @@ function InsightsPanelStage1B({
         ) : null}
       </section>
 
+      <section className="table-card insights-card export-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Export data</p>
+          </div>
+        </div>
+        <div className="export-actions" aria-label="Export data downloads">
+          <button
+            type="button"
+            className="refresh-button"
+            onClick={onExportCombinedData}
+            disabled={exportState === "combined" || Boolean(dataPeriodError)}
+          >
+            {exportState === "combined"
+              ? "Preparing combined CSV..."
+              : "Download glucose + events CSV"}
+          </button>
+        </div>
+
+        {exportErrorMessage ? (
+          <p className="form-error export-error-message">
+            {exportErrorMessage}
+          </p>
+        ) : null}
+      </section>
+
       <section className="table-card insights-card data-prompt-card">
         <div className="section-heading">
           <div>
@@ -1534,31 +1999,161 @@ function InsightsPanelStage1B({
         ) : null}
       </section>
 
-      <section className="table-card insights-card export-card">
+      <section className="table-card insights-card ai-review-card">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Export data</p>
+            <p className="eyebrow">AI daily review</p>
           </div>
         </div>
-        <div className="export-actions" aria-label="Export data downloads">
+        <div className="ai-review-form">
+          <label>
+            Paste ChatGPT response
+            <textarea
+              rows="7"
+              value={aiReviewText}
+              onChange={(event) => setAiReviewText(event.target.value)}
+              placeholder="Paste a cautious AI pattern review here."
+            />
+          </label>
+
+          <label>
+            Private notes
+            <textarea
+              rows="3"
+              value={aiReviewNotes}
+              onChange={(event) => setAiReviewNotes(event.target.value)}
+              placeholder="Optional notes for yourself."
+            />
+          </label>
+        </div>
+
+        <div className="ai-review-actions">
           <button
             type="button"
             className="refresh-button"
-            onClick={onExportCombinedData}
-            disabled={exportState === "combined" || Boolean(dataPeriodError)}
+            onClick={handleSaveAiDailyReview}
+            disabled={isSavingAiReview || Boolean(dataPeriodError)}
           >
-            {exportState === "combined"
-              ? "Preparing combined CSV..."
-              : "Download glucose + events CSV"}
+            {isSavingAiReview ? "Saving AI review..." : "Save AI review"}
           </button>
         </div>
 
-        {exportErrorMessage ? (
-          <p className="form-error export-error-message">
-            {exportErrorMessage}
-          </p>
+        {aiReviewSaveMessage ? (
+          <p className="data-page-feedback">{aiReviewSaveMessage}</p>
+        ) : null}
+
+        {aiReviewError ? (
+          <p className="form-error data-page-feedback">{aiReviewError}</p>
+        ) : null}
+
+        <div className="saved-review-status">
+          <h3 className="data-section-heading">Saved review</h3>
+
+          {isLoadingSavedReviews ? (
+            <p>Loading saved AI reviews...</p>
+          ) : !savedAiReviewForDate ? (
+            <p className="saved-review-empty">
+              No saved AI review for this date yet.
+            </p>
+          ) : (
+            <div className="saved-review-row">
+              <p className="saved-review-date">
+                Last saved{" "}
+                {formatDateTime(
+                  savedAiReviewForDate.updated_at ||
+                    savedAiReviewForDate.created_at,
+                )}
+              </p>
+              <div className="saved-review-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setIsViewingAiReview(true)}
+                >
+                  View
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleDeleteAiReview}
+                  disabled={isDeletingAiReview}
+                >
+                  {isDeletingAiReview ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="table-card insights-card ai-review-card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Longer-term AI prompt</p>
+          </div>
+        </div>
+        <div
+          className="long-term-range-controls"
+          aria-label="Longer-term AI review range"
+        >
+          <button
+            type="button"
+            className={longTermReviewRange === "7" ? "active" : ""}
+            onClick={() => setLongTermReviewRange("7")}
+          >
+            Last 7 days
+          </button>
+          <button
+            type="button"
+            className={longTermReviewRange === "14" ? "active" : ""}
+            onClick={() => setLongTermReviewRange("14")}
+          >
+            Last 14 days
+          </button>
+          <button
+            type="button"
+            className={longTermReviewRange === "30" ? "active" : ""}
+            onClick={() => setLongTermReviewRange("30")}
+          >
+            Last 30 days
+          </button>
+        </div>
+
+        <div
+          className="export-actions ai-review-export-actions"
+          aria-label="Longer-term AI prompt actions"
+        >
+          <button
+            type="button"
+            className="refresh-button"
+            onClick={handleCopyLongTermAiPrompt}
+          >
+            Copy longer-term prompt
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleDownloadLongTermAiReviews}
+          >
+            Download AI reviews text
+          </button>
+        </div>
+
+        {longTermPromptMessage ? (
+          <p className="data-page-feedback">{longTermPromptMessage}</p>
+        ) : null}
+
+        {longTermPromptError ? (
+          <p className="form-error data-page-feedback">{longTermPromptError}</p>
         ) : null}
       </section>
+
+      {isViewingAiReview && savedAiReviewForDate ? (
+        <AiReviewModal
+          review={savedAiReviewForDate}
+          onClose={() => setIsViewingAiReview(false)}
+        />
+      ) : null}
     </>
   );
 
@@ -1969,7 +2564,10 @@ function Dashboard({ session }) {
         .sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at)),
     );
     setSelectedChartItem((currentItem) => {
-      if (currentItem?.type !== "event" || currentItem.data.id !== updatedEvent.id) {
+      if (
+        currentItem?.type !== "event" ||
+        currentItem.data.id !== updatedEvent.id
+      ) {
         return currentItem;
       }
 
@@ -2776,7 +3374,9 @@ function Dashboard({ session }) {
             <article className="stat-card">
               <span className="card-label">Today’s readings</span>
               <strong>
-                {isLoadingTodayStatsReadings ? "Loading..." : todayReadings.length}
+                {isLoadingTodayStatsReadings
+                  ? "Loading..."
+                  : todayReadings.length}
               </strong>
               <p>Readings received today</p>
             </article>
@@ -3200,6 +3800,7 @@ function Dashboard({ session }) {
 
       {activePage === "insights" ? (
         <InsightsPanelStage1B
+          userId={session.user.id}
           readings={dataPeriodReadings}
           events={dataPeriodEvents}
           isLoadingReadings={isLoadingDataPeriodReadings}
@@ -3214,6 +3815,8 @@ function Dashboard({ session }) {
           onCustomStartDateChange={setCustomStartDate}
           onCustomEndDateChange={setCustomEndDate}
           dataPeriodLabel={dataPeriod.label}
+          dataPeriodStart={dataPeriod.start}
+          dataPeriodEnd={dataPeriod.end}
           dataPeriodError={dataPeriod.error}
         />
       ) : null}
