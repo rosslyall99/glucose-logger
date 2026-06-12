@@ -4,6 +4,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceArea,
   ReferenceLine,
   Scatter,
   XAxis,
@@ -83,6 +84,11 @@ function formatTime(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatDurationMinutes(durationSeconds) {
+  if (!Number.isFinite(Number(durationSeconds))) return 0;
+  return Math.max(0, Math.round(Number(durationSeconds) / 60));
 }
 
 function formatDateInputValue(date) {
@@ -866,103 +872,6 @@ function RecordEventPanel({ userId, onSaved }) {
   );
 }
 
-function TodayEventsList({
-  events,
-  isLoading,
-  onEdit,
-  onDelete,
-  deletingEventId,
-}) {
-  const today = new Date().toDateString();
-  const todaysEvents = events.filter((event) => {
-    return new Date(event.logged_at).toDateString() === today;
-  });
-
-  return (
-    <section className="table-card recorded-events-card">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Recorded events</p>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <p>Loading events...</p>
-      ) : todaysEvents.length === 0 ? (
-        <p>No manual events today.</p>
-      ) : (
-        <div className="log-list">
-          {todaysEvents.map((event) => {
-            const config = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.note;
-            const isDeleting = deletingEventId === event.id;
-
-            return (
-              <article
-                key={event.id}
-                className={`log-item ${config.className}`}
-              >
-                <div className="log-datetime">
-                  <strong>{formatDateOnly(event.logged_at)}</strong>
-                  <span>{formatTime(event.logged_at)}</span>
-                </div>
-
-                <div className="log-event-main">
-                  <span className="log-event-dot" aria-hidden="true" />
-                  <strong
-                    className="log-event-title"
-                    title={event.notes || "No notes recorded"}
-                  >
-                    {config.label}
-                  </strong>
-                  {event.amount !== null ? (
-                    <span className="log-amount">
-                      {event.amount}
-                      {event.unit ? event.unit : ""}
-                    </span>
-                  ) : null}
-                  {event.notes ? (
-                    <span className="log-notes-wrap">
-                      <button
-                        type="button"
-                        className="log-notes-pill"
-                        aria-label={`Notes for ${config.label}`}
-                      >
-                        Notes
-                      </button>
-                      <span className="log-notes-tooltip" role="tooltip">
-                        {event.notes}
-                      </span>
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="log-actions">
-                  <button
-                    type="button"
-                    className="small-action-button"
-                    onClick={() => onEdit?.(event)}
-                    disabled={isDeleting}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="small-action-button danger-action-button"
-                    onClick={() => onDelete?.(event)}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
 function MobileChartEventsList({
   events,
   isLoading,
@@ -1070,6 +979,40 @@ function MobileChartEventsList({
                     ) : null}
                   </div>
                 </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AutomaticEventsList({ exerciseEvents, isLoading }) {
+  return (
+    <section className="table-card recorded-events-card automatic-events-card">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Automatic events</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p>Loading automatic events...</p>
+      ) : exerciseEvents.length === 0 ? (
+        <p>No automatic events recorded for this period.</p>
+      ) : (
+        <div className="log-list">
+          {exerciseEvents.map((event) => {
+            const durationMinutes = formatDurationMinutes(
+              event.duration_seconds,
+            );
+            return (
+              <article key={event.id} className="log-item automatic-event-item">
+                <strong>
+                  Walking · {durationMinutes} min ·{" "}
+                  {formatTime(event.start_time)}–{formatTime(event.end_time)}
+                </strong>
               </article>
             );
           })}
@@ -1291,8 +1234,10 @@ function InsightsPanelStage1B({
   userId,
   readings,
   events,
+  automaticEvents,
   isLoadingReadings,
   isLoadingEvents,
+  isLoadingAutomaticEvents,
   onExportCombinedData,
   exportState,
   exportErrorMessage,
@@ -1307,7 +1252,8 @@ function InsightsPanelStage1B({
   dataPeriodEnd,
   dataPeriodError,
 }) {
-  const dataPageIsLoading = isLoadingReadings || isLoadingEvents;
+  const dataPageIsLoading =
+    isLoadingReadings || isLoadingEvents || isLoadingAutomaticEvents;
   const [copyStatus, setCopyStatus] = useState("");
   const [aiReviewText, setAiReviewText] = useState("");
   const [aiReviewNotes, setAiReviewNotes] = useState("");
@@ -1344,6 +1290,9 @@ function InsightsPanelStage1B({
     );
     const sortedEvents = [...events].sort(
       (a, b) => new Date(a.logged_at) - new Date(b.logged_at),
+    );
+    const sortedAutomaticEvents = [...automaticEvents].sort(
+      (a, b) => new Date(a.start_time) - new Date(b.start_time),
     );
     const timeBlocks = [
       { label: "Overnight", startHour: 0, endHour: 5 },
@@ -1428,6 +1377,7 @@ function InsightsPanelStage1B({
     const dateReference =
       sortedReadings[0]?.reading_time ||
       sortedEvents[0]?.logged_at ||
+      sortedAutomaticEvents[0]?.start_time ||
       new Date().toISOString();
     const highestReading =
       sortedReadings.length > 0
@@ -1476,6 +1426,23 @@ function InsightsPanelStage1B({
           })
         : ["- None recorded."];
 
+    const walkingSessionLines =
+      sortedAutomaticEvents.length > 0
+        ? sortedAutomaticEvents.map((event) => {
+            const durationMinutes = formatDurationMinutes(
+              event.duration_seconds,
+            );
+            return `- Walking ${formatTime(event.start_time)}-${formatTime(event.end_time)}, ${durationMinutes} min`;
+          })
+        : ["Exercise / automatic events: none recorded."];
+
+    const totalWalkingMinutes = formatDurationMinutes(
+      sortedAutomaticEvents.reduce(
+        (sum, event) => sum + Number(event.duration_seconds || 0),
+        0,
+      ),
+    );
+
     const sampledReadingLines =
       sortedReadings.length > 0
         ? sampleReadings(sortedReadings, 60).map(
@@ -1489,11 +1456,11 @@ function InsightsPanelStage1B({
       "Do not recommend insulin dose changes.",
       "Use cautious wording such as may be worth reviewing, could be useful to compare, or not enough data to draw a conclusion.",
       "",
-      "Please analyse this glucose and manual event summary and return:",
+      "Please analyse this glucose, manual event, and automatic exercise summary and return:",
       "1. Brief day summary",
       "2. Main glucose patterns",
       "3. Notable higher/lower periods",
-      "4. Event timing observations where possible",
+      "4. Event timing observations where possible, including cautious exercise timing observations in relation to glucose where relevant",
       "5. Data gaps",
       "6. Cautious discussion points",
       "",
@@ -1510,6 +1477,15 @@ function InsightsPanelStage1B({
       "",
       "Manual events:",
       ...eventLines,
+      "",
+      "Exercise / automatic events:",
+      ...walkingSessionLines,
+      ...(sortedAutomaticEvents.length > 0
+        ? [
+            `Total walking time: ${totalWalkingMinutes} min`,
+            `Walking sessions: ${sortedAutomaticEvents.length}`,
+          ]
+        : []),
       "",
       "Glucose samples, about hourly:",
       ...sampledReadingLines,
@@ -2157,241 +2133,6 @@ function InsightsPanelStage1B({
     </>
   );
 
-  const isLoading = isLoadingReadings || isLoadingEvents;
-  const readingValues = readings
-    .map((reading) => Number(reading.glucose_value))
-    .filter((value) => Number.isFinite(value));
-  const averageGlucose = readingValues.length
-    ? readingValues.reduce((sum, value) => sum + value, 0) /
-      readingValues.length
-    : null;
-  const highestReading = readingValues.length
-    ? Math.max(...readingValues)
-    : null;
-  const lowestReading = readingValues.length
-    ? Math.min(...readingValues)
-    : null;
-
-  const morningReadings = readings.filter((reading) => {
-    const hour = new Date(reading.reading_time).getHours();
-    return hour >= 5 && hour < 12;
-  });
-  const afternoonEveningReadings = readings.filter((reading) => {
-    const hour = new Date(reading.reading_time).getHours();
-    return hour >= 12 && hour < 23;
-  });
-
-  const getAverageForReadings = (segmentReadings) => {
-    if (segmentReadings.length === 0) return null;
-
-    const total = segmentReadings.reduce(
-      (sum, reading) => sum + Number(reading.glucose_value),
-      0,
-    );
-
-    return total / segmentReadings.length;
-  };
-
-  const morningAverage = getAverageForReadings(morningReadings);
-  const afternoonEveningAverage = getAverageForReadings(
-    afternoonEveningReadings,
-  );
-  const aboveRangeReadings = readings.filter(
-    (reading) => Number(reading.glucose_value) > 11.1,
-  );
-  const belowRangeReadings = readings.filter(
-    (reading) => Number(reading.glucose_value) < 3.9,
-  );
-  const carbEvents = events.filter((event) => event.event_type === "carbs");
-  const insulinEvents = events.filter((event) => {
-    return (
-      event.event_type === "fast_insulin" ||
-      event.event_type === "background_insulin"
-    );
-  });
-  const noteEvents = events.filter((event) => event.event_type === "note");
-  const hasEnoughMorningComparisonData =
-    morningReadings.length >= 2 && afternoonEveningReadings.length >= 2;
-
-  const patternCards = [
-    {
-      title: "Morning vs later readings",
-      body: hasEnoughMorningComparisonData
-        ? morningAverage > afternoonEveningAverage + 0.8
-          ? `Morning readings averaged ${morningAverage.toFixed(1)} compared with ${afternoonEveningAverage.toFixed(1)} later in the day, which may be worth reviewing.`
-          : `Morning readings averaged ${morningAverage.toFixed(1)} and later readings averaged ${afternoonEveningAverage.toFixed(1)} today, which could be useful to compare over time as a discussion prompt.`
-        : "Not enough data yet to compare morning readings with afternoon or evening readings.",
-    },
-    {
-      title: "Above-range readings",
-      body:
-        aboveRangeReadings.length === 0
-          ? "No readings above 11.1 were logged today."
-          : `${aboveRangeReadings.length} readings were above 11.1 today, which may be worth reviewing alongside meals, timing, or activity as a discussion prompt.`,
-    },
-    {
-      title: "Below-range readings",
-      body:
-        belowRangeReadings.length === 0
-          ? "No readings below 3.9 were logged today."
-          : `${belowRangeReadings.length} readings were below 3.9 today, which could be useful to compare with timing or notes as a discussion prompt.`,
-    },
-    {
-      title: "Carb events",
-      body:
-        carbEvents.length === 0
-          ? "No carb events are recorded today, so meal timing may be harder to compare. Not enough data yet for that pattern."
-          : `${carbEvents.length} carb event${carbEvents.length === 1 ? "" : "s"} ${carbEvents.length === 1 ? "is" : "are"} recorded today, which may be worth reviewing against nearby readings.`,
-    },
-    {
-      title: "Insulin events",
-      body:
-        insulinEvents.length === 0
-          ? "No insulin events are recorded today, so not enough data yet to compare readings with insulin timing."
-          : `${insulinEvents.length} insulin event${insulinEvents.length === 1 ? "" : "s"} ${insulinEvents.length === 1 ? "is" : "are"} recorded today, which could be useful to compare with readings later in the day.`,
-    },
-    {
-      title: "Notes",
-      body:
-        noteEvents.length === 0
-          ? "No notes are recorded today. Adding context like meals, activity, or how the day felt may make patterns easier to spot."
-          : `${noteEvents.length} note${noteEvents.length === 1 ? "" : "s"} ${noteEvents.length === 1 ? "is" : "are"} recorded today, which may be worth reviewing alongside the readings and events.`,
-    },
-  ];
-
-  return (
-    <>
-      <section className="table-card insights-card">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Insights</p>
-            <h2>Today at a glance</h2>
-          </div>
-        </div>
-
-        <p>
-          These insights are for personal logging and pattern spotting only.
-          They highlight observations from today's entries and discussion
-          prompts to review later.
-        </p>
-
-        <p className="insights-safety-note">
-          These are personal pattern-spotting prompts only and are not medical
-          advice.
-        </p>
-
-        <section className="insights-summary-grid" aria-label="Today summary">
-          <article className="stat-card insights-stat-card">
-            <span className="card-label">Average glucose</span>
-            <strong>
-              {isLoading
-                ? "Loading..."
-                : averageGlucose === null
-                  ? "-"
-                  : averageGlucose.toFixed(1)}
-            </strong>
-            <p>From today's glucose readings</p>
-          </article>
-
-          <article className="stat-card insights-stat-card">
-            <span className="card-label">Highest reading</span>
-            <strong>
-              {isLoading ? "Loading..." : (highestReading ?? "-")}
-            </strong>
-            <p>Highest reading logged today</p>
-          </article>
-
-          <article className="stat-card insights-stat-card">
-            <span className="card-label">Lowest reading</span>
-            <strong>{isLoading ? "Loading..." : (lowestReading ?? "-")}</strong>
-            <p>Lowest reading logged today</p>
-          </article>
-
-          <article className="stat-card insights-stat-card">
-            <span className="card-label">Number of readings</span>
-            <strong>
-              {isLoadingReadings ? "Loading..." : readings.length}
-            </strong>
-            <p>Glucose readings recorded today</p>
-          </article>
-
-          <article className="stat-card insights-stat-card">
-            <span className="card-label">Manual events</span>
-            <strong>{isLoadingEvents ? "Loading..." : events.length}</strong>
-            <p>Entries from carbs, insulin, or notes today</p>
-          </article>
-        </section>
-      </section>
-
-      <section className="table-card insights-card">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Patterns to review</p>
-            <h2>Discussion prompts</h2>
-          </div>
-        </div>
-
-        <div className="insights-grid">
-          {isLoading ? (
-            <article>
-              <strong>Loading today's patterns</strong>
-              <p>Today's readings and events are still loading.</p>
-            </article>
-          ) : (
-            patternCards.map((card) => (
-              <article key={card.title}>
-                <strong>{card.title}</strong>
-                <p>{card.body}</p>
-              </article>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="table-card insights-card export-card">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Export data</p>
-            <h2>Download your records</h2>
-          </div>
-        </div>
-
-        <p>
-          Download CSV files for your own records or to share with a clinician.
-        </p>
-
-        <div className="export-actions" aria-label="Export data downloads">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={onExportReadings}
-            disabled={exportState === "readings" || exportState === "events"}
-          >
-            {exportState === "readings"
-              ? "Preparing glucose CSV..."
-              : "Download glucose readings CSV"}
-          </button>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={onExportEvents}
-            disabled={exportState === "readings" || exportState === "events"}
-          >
-            {exportState === "events"
-              ? "Preparing events CSV..."
-              : "Download manual events CSV"}
-          </button>
-        </div>
-
-        {exportErrorMessage ? (
-          <p className="form-error export-error-message">
-            {exportErrorMessage}
-          </p>
-        ) : null}
-      </section>
-    </>
-  );
 }
 
 function Dashboard({ session }) {
@@ -2404,6 +2145,8 @@ function Dashboard({ session }) {
     useState(false);
   const [dataPeriodReadings, setDataPeriodReadings] = useState([]);
   const [events, setEvents] = useState([]);
+  const [chartExerciseEvents, setChartExerciseEvents] = useState([]);
+  const [dataPeriodExerciseEvents, setDataPeriodExerciseEvents] = useState([]);
   const [selectedChartItem, setSelectedChartItem] = useState(null);
   const [activePage, setActivePage] = useState("record");
   const [chartRange, setChartRange] = useState("today");
@@ -2416,6 +2159,12 @@ function Dashboard({ session }) {
   const [isLoadingDataPeriodReadings, setIsLoadingDataPeriodReadings] =
     useState(false);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [isLoadingChartExerciseEvents, setIsLoadingChartExerciseEvents] =
+    useState(false);
+  const [
+    isLoadingDataPeriodExerciseEvents,
+    setIsLoadingDataPeriodExerciseEvents,
+  ] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [exportState, setExportState] = useState("");
   const [exportErrorMessage, setExportErrorMessage] = useState("");
@@ -2429,40 +2178,6 @@ function Dashboard({ session }) {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const chartWrapRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(0);
-
-  async function fetchAllUserRows({
-    table,
-    columns,
-    orderColumn,
-    pageSize = 1000,
-  }) {
-    const allRows = [];
-    let from = 0;
-
-    while (true) {
-      const to = from + pageSize - 1;
-      const { data, error } = await supabase
-        .from(table)
-        .select(columns)
-        .order(orderColumn, { ascending: true })
-        .range(from, to);
-
-      if (error) {
-        throw error;
-      }
-
-      const rows = data || [];
-      allRows.push(...rows);
-
-      if (rows.length < pageSize) {
-        break;
-      }
-
-      from += pageSize;
-    }
-
-    return allRows;
-  }
 
   async function loadReadings() {
     setErrorMessage("");
@@ -2496,6 +2211,41 @@ function Dashboard({ session }) {
         .gte("reading_time", startIso)
         .lt("reading_time", endIso)
         .order("reading_time", { ascending: true })
+        .range(from, to);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = data || [];
+      allRows.push(...rows);
+
+      if (rows.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+    return allRows;
+  }
+
+  async function fetchAllExerciseEvents(startIso, endIso) {
+    const pageSize = 1000;
+    let from = 0;
+    const allRows = [];
+
+    while (true) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
+        .from("exercise_events")
+        .select(
+          "id, start_time, end_time, duration_seconds, source, source_app, source_record_id, exercise_type, exercise_label, raw_payload, created_at",
+        )
+        .eq("exercise_label", "walking")
+        .lt("start_time", endIso)
+        .gt("end_time", startIso)
+        .order("start_time", { ascending: true })
         .range(from, to);
 
       if (error) {
@@ -2760,14 +2510,6 @@ function Dashboard({ session }) {
     return total / todayReadings.length;
   }, [todayReadings]);
 
-  const todayEvents = useMemo(() => {
-    const today = new Date().toDateString();
-
-    return events.filter((event) => {
-      return new Date(event.logged_at).toDateString() === today;
-    });
-  }, [events]);
-
   const dataPeriod = useMemo(
     () => getDataPeriodConfig(dataPeriodPreset, customStartDate, customEndDate),
     [dataPeriodPreset, customStartDate, customEndDate],
@@ -2880,6 +2622,48 @@ function Dashboard({ session }) {
   useEffect(() => {
     let isCurrent = true;
 
+    async function syncDataPeriodExerciseEvents() {
+      if (dataPeriod.error || !dataPeriod.start || !dataPeriod.end) {
+        if (!isCurrent) return;
+
+        setDataPeriodExerciseEvents([]);
+        setIsLoadingDataPeriodExerciseEvents(false);
+        return;
+      }
+
+      setIsLoadingDataPeriodExerciseEvents(true);
+
+      try {
+        const data = await fetchAllExerciseEvents(
+          dataPeriod.start.toISOString(),
+          dataPeriod.end.toISOString(),
+        );
+
+        if (!isCurrent) return;
+
+        setDataPeriodExerciseEvents(data || []);
+      } catch (error) {
+        if (!isCurrent) return;
+
+        setErrorMessage(error.message);
+        setDataPeriodExerciseEvents([]);
+      } finally {
+        if (isCurrent) {
+          setIsLoadingDataPeriodExerciseEvents(false);
+        }
+      }
+    }
+
+    syncDataPeriodExerciseEvents();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [dataPeriod, lastUpdatedAt]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
     async function syncChartDayReadings() {
       if (chartRange !== "today") {
         if (!isCurrent) return;
@@ -2936,8 +2720,13 @@ function Dashboard({ session }) {
       chartRange === "last_hour" ? 60 * 60 * 1000 : 4 * 60 * 60 * 1000;
 
     if (chartRange === "last_hour" || chartRange === "last_4h") {
+      const latestSelectedDayReading =
+        selectedDayReadings[selectedDayReadings.length - 1] || null;
+
       if (isToday) {
-        const end = new Date();
+        const end = latestSelectedDayReading
+          ? new Date(latestSelectedDayReading.reading_time)
+          : new Date();
         const start = new Date(end.getTime() - durationMs);
 
         return {
@@ -2948,8 +2737,6 @@ function Dashboard({ session }) {
         };
       }
 
-      const latestSelectedDayReading =
-        selectedDayReadings[selectedDayReadings.length - 1] || null;
       const fallbackEnd = new Date(selectedDayEnd.getTime() - 1);
       const end = latestSelectedDayReading
         ? new Date(latestSelectedDayReading.reading_time)
@@ -2990,6 +2777,40 @@ function Dashboard({ session }) {
       );
     });
   }, [chartDayReadings, chartRange, readings, chartWindow]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function syncChartExerciseEvents() {
+      setIsLoadingChartExerciseEvents(true);
+
+      try {
+        const data = await fetchAllExerciseEvents(
+          new Date(chartWindow.startMs).toISOString(),
+          new Date(chartWindow.endMs).toISOString(),
+        );
+
+        if (!isCurrent) return;
+
+        setChartExerciseEvents(data || []);
+      } catch (error) {
+        if (!isCurrent) return;
+
+        setErrorMessage(error.message);
+        setChartExerciseEvents([]);
+      } finally {
+        if (isCurrent) {
+          setIsLoadingChartExerciseEvents(false);
+        }
+      }
+    }
+
+    syncChartExerciseEvents();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [chartWindow.endMs, chartWindow.startMs, lastUpdatedAt]);
 
   const visualChartData = useMemo(() => {
     const mappedPoints = [...chartReadings]
@@ -3169,6 +2990,33 @@ function Dashboard({ session }) {
       })
       .sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at));
   }, [events, chartWindow]);
+
+  const chartWalkingBlocks = useMemo(() => {
+    return [...chartExerciseEvents]
+      .filter((event) => {
+        const startTime = new Date(event.start_time).getTime();
+        const endTime = new Date(event.end_time).getTime();
+
+        return (
+          Number.isFinite(startTime) &&
+          Number.isFinite(endTime) &&
+          endTime > chartWindow.startMs &&
+          startTime < chartWindow.endMs
+        );
+      })
+      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+      .map((event) => ({
+        ...event,
+        x1: Math.max(
+          chartWindow.displayStartMs,
+          new Date(event.start_time).getTime(),
+        ),
+        x2: Math.min(
+          chartWindow.displayEndMs,
+          new Date(event.end_time).getTime(),
+        ),
+      }));
+  }, [chartExerciseEvents, chartWindow]);
 
   const periodReadings = useMemo(() => {
     return [...chartReadings].sort((a, b) => {
@@ -3544,6 +3392,22 @@ function Dashboard({ session }) {
                       strokeOpacity={0.45}
                     />
 
+                    {chartWalkingBlocks.map((event) => (
+                      <ReferenceArea
+                        key={event.id}
+                        yAxisId="glucose"
+                        x1={event.x1}
+                        x2={event.x2}
+                        y1={1}
+                        y2={19}
+                        ifOverflow="visible"
+                        className="walking-reference-area"
+                        fill="#4b7f52"
+                        fillOpacity={0.07}
+                        strokeOpacity={0}
+                      />
+                    ))}
+
                     {glucoseLineSegments.gapSegments.map((segment, index) => (
                       <Line
                         key={`glucose-gap-${index}`}
@@ -3716,6 +3580,11 @@ function Dashboard({ session }) {
             selectedEventId={selectedEventId}
           />
 
+          <AutomaticEventsList
+            exerciseEvents={chartWalkingBlocks}
+            isLoading={isLoadingChartExerciseEvents}
+          />
+
           <section className="table-card compact-readings-card">
             <div className="section-heading readings-heading">
               <div>
@@ -3803,8 +3672,10 @@ function Dashboard({ session }) {
           userId={session.user.id}
           readings={dataPeriodReadings}
           events={dataPeriodEvents}
+          automaticEvents={dataPeriodExerciseEvents}
           isLoadingReadings={isLoadingDataPeriodReadings}
           isLoadingEvents={isLoadingEvents}
+          isLoadingAutomaticEvents={isLoadingDataPeriodExerciseEvents}
           onExportCombinedData={handleExportCombinedData}
           exportState={exportState}
           exportErrorMessage={exportErrorMessage}

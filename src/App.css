@@ -959,7 +959,7 @@ th {
 .log-item.event-fast .log-amount {
   border-color: rgba(220, 38, 38, 0.28);
   color: #b91c1c;
-  background: rgba(220, 38, 38, 0.08);
+  background: rgba(220, 38, 38, 0.12);
 }
 
 .log-item.event-background {
@@ -982,6 +982,20 @@ th {
 
 .log-item.event-note .log-event-dot {
   background: #64748b;
+}
+
+.automatic-event-item {
+  grid-template-columns: minmax(0, 1fr);
+  cursor: default;
+  border-color: rgba(75, 127, 82, 0.24);
+  background: rgba(75, 127, 82, 0.04);
+}
+
+.automatic-event-item strong {
+  color: #183924;
+  display: block;
+  min-width: 0;
+  line-height: 1.35;
 }
 
 @media (max-width: 900px) {
@@ -1728,7 +1742,7 @@ th {
 .status-pill.status-very-high,
 .status-pill.status-low {
   border-color: rgba(220, 38, 38, 0.3);
-  background: rgba(220, 38, 38, 0.08);
+  background: rgba(220, 38, 38, 0.12);
   color: #b91c1c;
 }
 
@@ -1848,6 +1862,9 @@ th {
 
   .mobile-chart-log-list {
     gap: 8px;
+    max-height: 290px;
+    overflow-y: auto;
+    padding-right: 4px;
   }
 
   .mobile-chart-log-item {
@@ -2299,7 +2316,7 @@ th {
 
 .selected-chart-item-pill.event-fast {
   border-color: rgba(220, 38, 38, 0.24);
-  background: rgba(220, 38, 38, 0.08);
+  background: rgba(220, 38, 38, 0.12);
   color: #b91c1c;
 }
 
@@ -2330,8 +2347,12 @@ th {
 
 .selected-chart-item-pill.tone-red {
   border-color: rgba(220, 38, 38, 0.24);
-  background: rgba(220, 38, 38, 0.08);
+  background: rgba(220, 38, 38, 0.12);
   color: #b91c1c;
+}
+
+.walking-reference-area {
+  cursor: default;
 }
 
 @media (max-width: 900px) {
