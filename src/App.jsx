@@ -3403,7 +3403,7 @@ function Dashboard({ session }) {
                         ifOverflow="visible"
                         className="walking-reference-area"
                         fill="#4b7f52"
-                        fillOpacity={0.07}
+                        fillOpacity={0.16}
                         strokeOpacity={0}
                       />
                     ))}

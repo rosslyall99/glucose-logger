@@ -2355,6 +2355,10 @@ th {
   cursor: default;
 }
 
+.walking-reference-area:hover rect {
+  fill-opacity: 0.22;
+}
+
 @media (max-width: 900px) {
   .chart-layout {
     grid-template-columns: 1fr !important;
