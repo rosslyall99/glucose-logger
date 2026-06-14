@@ -91,6 +91,42 @@ function formatDurationMinutes(durationSeconds) {
   return Math.max(0, Math.round(Number(durationSeconds) / 60));
 }
 
+function formatDurationCompact(durationSeconds) {
+  const totalMinutes = formatDurationMinutes(durationSeconds);
+
+  if (totalMinutes >= 60) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (minutes === 0) return `${hours}h`;
+    return `${hours}h ${minutes}m`;
+  }
+
+  return `${totalMinutes} min`;
+}
+
+function getAutomaticEventType(event) {
+  if (event?.automaticType) return event.automaticType;
+  if ("sleep_label" in (event || {})) return "sleep";
+  return "walking";
+}
+
+function getAutomaticEventLabel(event) {
+  return getAutomaticEventType(event) === "sleep" ? "Sleep" : "Walking";
+}
+
+function getAutomaticEventDurationLabel(event) {
+  if (getAutomaticEventType(event) === "sleep") {
+    return formatDurationCompact(event.duration_seconds);
+  }
+
+  return `${formatDurationMinutes(event.duration_seconds)} min`;
+}
+
+function getAutomaticEventSummary(event) {
+  return `${getAutomaticEventLabel(event)}, ${getAutomaticEventDurationLabel(event)}, ${formatTime(event.start_time)}–${formatTime(event.end_time)}`;
+}
+
 function formatDateInputValue(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -988,7 +1024,12 @@ function MobileChartEventsList({
   );
 }
 
-function AutomaticEventsList({ exerciseEvents, isLoading }) {
+function AutomaticEventsList({
+  automaticEvents,
+  isLoading,
+  onSelect,
+  selectedAutomaticEventId,
+}) {
   return (
     <section className="table-card recorded-events-card automatic-events-card">
       <div className="section-heading">
@@ -999,20 +1040,32 @@ function AutomaticEventsList({ exerciseEvents, isLoading }) {
 
       {isLoading ? (
         <p>Loading automatic events...</p>
-      ) : exerciseEvents.length === 0 ? (
+      ) : automaticEvents.length === 0 ? (
         <p>No automatic events recorded for this period.</p>
       ) : (
         <div className="log-list">
-          {exerciseEvents.map((event) => {
-            const durationMinutes = formatDurationMinutes(
-              event.duration_seconds,
-            );
+          {automaticEvents.map((event) => {
+            const automaticType = getAutomaticEventType(event);
             return (
-              <article key={event.id} className="log-item automatic-event-item">
-                <strong>
-                  Walking · {durationMinutes} min ·{" "}
-                  {formatTime(event.start_time)}–{formatTime(event.end_time)}
-                </strong>
+              <article
+                key={`${automaticType}-${event.id}`}
+                className={`log-item automatic-event-item ${automaticType === "sleep" ? "sleep-event" : "walking-event"}${
+                  selectedAutomaticEventId === event.id
+                    ? " is-selected"
+                    : ""
+                }`}
+                role="button"
+                tabIndex={0}
+                aria-pressed={selectedAutomaticEventId === event.id}
+                onClick={() => onSelect?.(event)}
+                onKeyDown={(eventKey) => {
+                  if (eventKey.key === "Enter" || eventKey.key === " ") {
+                    eventKey.preventDefault();
+                    onSelect?.(event);
+                  }
+                }}
+              >
+                <strong>{getAutomaticEventSummary(event)}</strong>
               </article>
             );
           })}
@@ -2146,6 +2199,7 @@ function Dashboard({ session }) {
   const [dataPeriodReadings, setDataPeriodReadings] = useState([]);
   const [events, setEvents] = useState([]);
   const [chartExerciseEvents, setChartExerciseEvents] = useState([]);
+  const [sleepEvents, setSleepEvents] = useState([]);
   const [dataPeriodExerciseEvents, setDataPeriodExerciseEvents] = useState([]);
   const [selectedChartItem, setSelectedChartItem] = useState(null);
   const [activePage, setActivePage] = useState("record");
@@ -2161,6 +2215,7 @@ function Dashboard({ session }) {
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [isLoadingChartExerciseEvents, setIsLoadingChartExerciseEvents] =
     useState(false);
+  const [isLoadingSleepEvents, setIsLoadingSleepEvents] = useState(false);
   const [
     isLoadingDataPeriodExerciseEvents,
     setIsLoadingDataPeriodExerciseEvents,
@@ -2243,6 +2298,40 @@ function Dashboard({ session }) {
           "id, start_time, end_time, duration_seconds, source, source_app, source_record_id, exercise_type, exercise_label, raw_payload, created_at",
         )
         .eq("exercise_label", "walking")
+        .lt("start_time", endIso)
+        .gt("end_time", startIso)
+        .order("start_time", { ascending: true })
+        .range(from, to);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = data || [];
+      allRows.push(...rows);
+
+      if (rows.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+    return allRows;
+  }
+
+  async function fetchAllSleepEvents(startIso, endIso) {
+    const pageSize = 1000;
+    let from = 0;
+    const allRows = [];
+
+    while (true) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
+        .from("sleep_events")
+        .select(
+          "id, start_time, end_time, duration_seconds, source, source_app, source_record_id, sleep_label, stages, raw_payload, created_at",
+        )
         .lt("start_time", endIso)
         .gt("end_time", startIso)
         .order("start_time", { ascending: true })
@@ -2812,6 +2901,40 @@ function Dashboard({ session }) {
     };
   }, [chartWindow.endMs, chartWindow.startMs, lastUpdatedAt]);
 
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function syncSleepEvents() {
+      setIsLoadingSleepEvents(true);
+
+      try {
+        const data = await fetchAllSleepEvents(
+          new Date(chartWindow.startMs).toISOString(),
+          new Date(chartWindow.endMs).toISOString(),
+        );
+
+        if (!isCurrent) return;
+
+        setSleepEvents(data || []);
+      } catch (error) {
+        if (!isCurrent) return;
+
+        setErrorMessage(error.message);
+        setSleepEvents([]);
+      } finally {
+        if (isCurrent) {
+          setIsLoadingSleepEvents(false);
+        }
+      }
+    }
+
+    syncSleepEvents();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [chartWindow.endMs, chartWindow.startMs, lastUpdatedAt]);
+
   const visualChartData = useMemo(() => {
     const mappedPoints = [...chartReadings]
       .sort((a, b) => new Date(a.reading_time) - new Date(b.reading_time))
@@ -3018,6 +3141,44 @@ function Dashboard({ session }) {
       }));
   }, [chartExerciseEvents, chartWindow]);
 
+  const chartSleepBlocks = useMemo(() => {
+    return [...sleepEvents]
+      .filter((event) => {
+        const startTime = new Date(event.start_time).getTime();
+        const endTime = new Date(event.end_time).getTime();
+
+        return (
+          Number.isFinite(startTime) &&
+          Number.isFinite(endTime) &&
+          endTime > chartWindow.startMs &&
+          startTime < chartWindow.endMs
+        );
+      })
+      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+      .map((event) => ({
+        ...event,
+        automaticType: "sleep",
+        x1: Math.max(
+          chartWindow.displayStartMs,
+          new Date(event.start_time).getTime(),
+        ),
+        x2: Math.min(
+          chartWindow.displayEndMs,
+          new Date(event.end_time).getTime(),
+        ),
+      }));
+  }, [chartWindow, sleepEvents]);
+
+  const chartAutomaticEvents = useMemo(() => {
+    return [
+      ...chartWalkingBlocks.map((event) => ({
+        ...event,
+        automaticType: "walking",
+      })),
+      ...chartSleepBlocks,
+    ].sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+  }, [chartSleepBlocks, chartWalkingBlocks]);
+
   const periodReadings = useMemo(() => {
     return [...chartReadings].sort((a, b) => {
       return new Date(b.reading_time) - new Date(a.reading_time);
@@ -3082,8 +3243,14 @@ function Dashboard({ session }) {
     selectedChartItem?.type === "reading" ? selectedChartItem.data.id : null;
   const selectedEventId =
     selectedChartItem?.type === "event" ? selectedChartItem.data.id : null;
+  const selectedAutomaticEventId =
+    selectedChartItem?.type === "automaticEvent"
+      ? selectedChartItem.data.id
+      : null;
   const selectedChartEvent =
     selectedChartItem?.type === "event" ? selectedChartItem.data : null;
+  const selectedChartAutomaticEvent =
+    selectedChartItem?.type === "automaticEvent" ? selectedChartItem.data : null;
   const selectedChartReading =
     selectedChartItem?.type === "reading" ? selectedChartItem.data : null;
   const selectedChartEventConfig = selectedChartEvent
@@ -3095,6 +3262,10 @@ function Dashboard({ session }) {
   const selectedChartReadingTone = selectedChartReading
     ? getGlucoseSelectionTone(selectedChartReading.glucose)
     : "tone-grey";
+  const selectedAutomaticEventTone =
+    getAutomaticEventType(selectedChartAutomaticEvent) === "sleep"
+      ? "tone-grey"
+      : "tone-green";
 
   const chartDayLabel =
     chartDayOffset === 0 ? "Today" : formatDateOnly(selectedDayStart);
@@ -3303,6 +3474,8 @@ function Dashboard({ session }) {
                 <span className="legend-carbs">Carbs</span>
                 <span className="legend-fast">Fast acting</span>
                 <span className="legend-background">Background</span>
+                <span className="legend-walking">Walking</span>
+                <span className="legend-sleep">Sleep</span>
               </div>
 
               <div
@@ -3392,9 +3565,31 @@ function Dashboard({ session }) {
                       strokeOpacity={0.45}
                     />
 
+                    {chartSleepBlocks.map((event) => (
+                      <ReferenceArea
+                        key={`sleep-${event.id}`}
+                        yAxisId="glucose"
+                        x1={event.x1}
+                        x2={event.x2}
+                        y1={1}
+                        y2={19}
+                        ifOverflow="visible"
+                        className="sleep-reference-area"
+                        fill="#f87171"
+                        fillOpacity={0.12}
+                        strokeOpacity={0}
+                        onClick={() =>
+                          setSelectedChartItem({
+                            type: "automaticEvent",
+                            data: event,
+                          })
+                        }
+                      />
+                    ))}
+
                     {chartWalkingBlocks.map((event) => (
                       <ReferenceArea
-                        key={event.id}
+                        key={`walking-${event.id}`}
                         yAxisId="glucose"
                         x1={event.x1}
                         x2={event.x2}
@@ -3402,9 +3597,18 @@ function Dashboard({ session }) {
                         y2={19}
                         ifOverflow="visible"
                         className="walking-reference-area"
-                        fill="#4b7f52"
-                        fillOpacity={0.16}
+                        fill="#22c55e"
+                        fillOpacity={0.12}
                         strokeOpacity={0}
+                        onClick={() =>
+                          setSelectedChartItem({
+                            type: "automaticEvent",
+                            data: {
+                              ...event,
+                              automaticType: "walking",
+                            },
+                          })
+                        }
                       />
                     ))}
 
@@ -3486,14 +3690,18 @@ function Dashboard({ session }) {
             {selectedChartItem ? (
               <section
                 className={`selected-chart-item-panel ${
-                  selectedChartEvent
-                    ? `is-event ${selectedChartEventConfig.className}`
+                  selectedChartEvent || selectedChartAutomaticEvent
+                    ? `is-event ${
+                        selectedChartEventConfig?.className || selectedAutomaticEventTone
+                      }`
                     : `is-reading ${selectedChartReadingTone}`
                 }`}
               >
                 <div className="selected-chart-item-header">
                   <span className="selected-chart-item-kicker">
-                    {selectedChartEvent ? "Selected event" : "Selected reading"}
+                    {selectedChartEvent || selectedChartAutomaticEvent
+                      ? "Selected event"
+                      : "Selected reading"}
                   </span>
                   <button
                     type="button"
@@ -3544,6 +3752,19 @@ function Dashboard({ session }) {
                         Edit event
                       </button>
                     </>
+                  ) : selectedChartAutomaticEvent ? (
+                    <>
+                      <div className="selected-chart-item-line">
+                        <strong>
+                          {getAutomaticEventSummary(selectedChartAutomaticEvent)}
+                        </strong>
+                        <span
+                          className={`selected-chart-item-pill ${selectedAutomaticEventTone}`}
+                        >
+                          {getAutomaticEventLabel(selectedChartAutomaticEvent)}
+                        </span>
+                      </div>
+                    </>
                   ) : (
                     <>
                       <div className="selected-chart-item-line">
@@ -3581,8 +3802,15 @@ function Dashboard({ session }) {
           />
 
           <AutomaticEventsList
-            exerciseEvents={chartWalkingBlocks}
-            isLoading={isLoadingChartExerciseEvents}
+            automaticEvents={chartAutomaticEvents}
+            isLoading={isLoadingChartExerciseEvents || isLoadingSleepEvents}
+            onSelect={(event) =>
+              setSelectedChartItem({
+                type: "automaticEvent",
+                data: event,
+              })
+            }
+            selectedAutomaticEventId={selectedAutomaticEventId}
           />
 
           <section className="table-card compact-readings-card">

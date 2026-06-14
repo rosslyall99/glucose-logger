@@ -899,6 +899,14 @@ th {
   background: #16a34a;
 }
 
+.legend-walking::before {
+  background: #22c55e;
+}
+
+.legend-sleep::before {
+  background: #f87171;
+}
+
 .chart-range-controls {
   display: flex;
   gap: 10px;
@@ -986,16 +994,29 @@ th {
 
 .automatic-event-item {
   grid-template-columns: minmax(0, 1fr);
-  cursor: default;
-  border-color: rgba(75, 127, 82, 0.24);
-  background: rgba(75, 127, 82, 0.04);
+  cursor: pointer;
+  border-color: rgba(34, 197, 94, 0.26);
+  background: rgba(34, 197, 94, 0.05);
 }
 
 .automatic-event-item strong {
-  color: #183924;
+  color: #166534;
   display: block;
   min-width: 0;
   line-height: 1.35;
+}
+
+.automatic-event-item.is-selected {
+  box-shadow: inset 0 0 0 1px rgba(84, 105, 130, 0.22);
+}
+
+.automatic-event-item.sleep-event {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.06);
+}
+
+.automatic-event-item.sleep-event strong {
+  color: #991b1b;
 }
 
 @media (max-width: 900px) {
@@ -2239,6 +2260,14 @@ th {
   border-color: rgba(100, 116, 139, 0.2);
 }
 
+.selected-chart-item-panel.is-event.tone-grey {
+  border-color: rgba(100, 116, 139, 0.2);
+}
+
+.selected-chart-item-panel.is-event.tone-green {
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
 .selected-chart-item-panel.is-reading.tone-green {
   border-color: rgba(22, 163, 74, 0.22);
 }
@@ -2356,6 +2385,14 @@ th {
 }
 
 .walking-reference-area:hover rect {
+  fill-opacity: 0.22;
+}
+
+.sleep-reference-area {
+  cursor: default;
+}
+
+.sleep-reference-area:hover rect {
   fill-opacity: 0.22;
 }
 
