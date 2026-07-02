@@ -15,6 +15,8 @@ import "./App.css";
 
 const READINGS_PER_PAGE = 12;
 const GLUCOSE_GAP_MS = 20 * 60 * 1000;
+const STEP_GROUP_GAP_MS = 5 * 60 * 1000;
+const STEP_GROUP_MAX_DURATION_SECONDS = 7200;
 const EVENT_TYPE_ORDER = {
   background_insulin: 0,
   fast_insulin: 1,
@@ -105,14 +107,26 @@ function formatDurationCompact(durationSeconds) {
   return `${totalMinutes} min`;
 }
 
+function formatStepCount(stepCount) {
+  const safeStepCount = Number(stepCount);
+  if (!Number.isFinite(safeStepCount)) return "0";
+
+  return new Intl.NumberFormat("en-GB").format(Math.max(0, safeStepCount));
+}
+
 function getAutomaticEventType(event) {
   if (event?.automaticType) return event.automaticType;
   if ("sleep_label" in (event || {})) return "sleep";
+  if (event?.source === "steps") return "steps";
   return "walking";
 }
 
 function getAutomaticEventLabel(event) {
-  return getAutomaticEventType(event) === "sleep" ? "Sleep" : "Walking";
+  const automaticType = getAutomaticEventType(event);
+
+  if (automaticType === "sleep") return "Sleep";
+  if (automaticType === "steps") return "Activity";
+  return "Walking";
 }
 
 function getAutomaticEventDurationLabel(event) {
@@ -123,8 +137,90 @@ function getAutomaticEventDurationLabel(event) {
   return `${formatDurationMinutes(event.duration_seconds)} min`;
 }
 
-function getAutomaticEventSummary(event) {
+function getAutomaticEventSummaryLegacy(event) {
   return `${getAutomaticEventLabel(event)}, ${getAutomaticEventDurationLabel(event)}, ${formatTime(event.start_time)}–${formatTime(event.end_time)}`;
+}
+
+function getAutomaticEventSummary(event) {
+  const automaticType = getAutomaticEventType(event);
+  const timeRange = `${formatTime(event.start_time)}-${formatTime(event.end_time)}`;
+
+  if (automaticType === "steps") {
+    const durationMinutes = formatDurationMinutes(event.duration_seconds);
+    const stepLabel = `${formatStepCount(event.total_steps ?? event.step_count)} steps`;
+    return event.start_time && event.end_time
+      ? `Activity - ${timeRange} - ${stepLabel}`
+      : `Activity - ${durationMinutes} min - ${stepLabel}`;
+  }
+
+  return `${getAutomaticEventLabel(event)}, ${getAutomaticEventDurationLabel(event)}, ${timeRange}`;
+}
+
+function toValidTimestamp(value) {
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function groupStepRecords(stepRecords) {
+  const filteredRecords = [...(stepRecords || [])]
+    .filter((record) => {
+      if (record?.source_app === "com.sec.android.app.shealth") return false;
+
+      const startMs = toValidTimestamp(record?.start_time);
+      const endMs = toValidTimestamp(record?.end_time);
+      const stepCount = Number(record?.step_count);
+      const durationSeconds = Number(record?.duration_seconds);
+
+      return (
+        startMs !== null &&
+        endMs !== null &&
+        endMs > startMs &&
+        Number.isFinite(stepCount) &&
+        stepCount > 0 &&
+        Number.isFinite(durationSeconds) &&
+        durationSeconds >= 0 &&
+        durationSeconds <= STEP_GROUP_MAX_DURATION_SECONDS
+      );
+    })
+    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+  const groups = [];
+
+  filteredRecords.forEach((record) => {
+    const startDate = new Date(record.start_time);
+    const endDate = new Date(record.end_time);
+    const startMs = startDate.getTime();
+    const endMs = endDate.getTime();
+    const stepCount = Number(record.step_count);
+    const durationSeconds = Number(record.duration_seconds);
+    const previousGroup = groups[groups.length - 1];
+
+    if (!previousGroup || startMs - previousGroup.endMs > STEP_GROUP_GAP_MS) {
+      groups.push({
+        id: `steps-${record.id}`,
+        start_time: startDate,
+        end_time: endDate,
+        startMs,
+        endMs,
+        total_steps: stepCount,
+        duration_seconds: durationSeconds,
+        source: "steps",
+        label: "Activity",
+        automaticType: "steps",
+      });
+      return;
+    }
+
+    previousGroup.endMs = Math.max(previousGroup.endMs, endMs);
+    previousGroup.end_time = new Date(previousGroup.endMs);
+    previousGroup.total_steps += stepCount;
+    previousGroup.duration_seconds += durationSeconds;
+  });
+
+  return groups.filter(
+    (group) =>
+      group.total_steps >= 300 || Number(group.duration_seconds || 0) >= 300,
+  );
 }
 
 function formatDateInputValue(date) {
@@ -1479,21 +1575,48 @@ function InsightsPanelStage1B({
           })
         : ["- None recorded."];
 
-    const walkingSessionLines =
+    const automaticEventLines =
       sortedAutomaticEvents.length > 0
         ? sortedAutomaticEvents.map((event) => {
+            const automaticType = getAutomaticEventType(event);
             const durationMinutes = formatDurationMinutes(
               event.duration_seconds,
             );
+
+            if (automaticType === "steps") {
+              return `- Step-based activity ${formatTime(event.start_time)}-${formatTime(event.end_time)}, ${durationMinutes} min, ${formatStepCount(event.total_steps ?? event.step_count)} steps`;
+            }
+
+            if (automaticType === "sleep") {
+              return `- Sleep ${formatTime(event.start_time)}-${formatTime(event.end_time)}, ${formatDurationCompact(event.duration_seconds)}`;
+            }
+
             return `- Walking ${formatTime(event.start_time)}-${formatTime(event.end_time)}, ${durationMinutes} min`;
           })
         : ["Exercise / automatic events: none recorded."];
 
+    const walkingEventsOnly = sortedAutomaticEvents.filter(
+      (event) => getAutomaticEventType(event) === "walking",
+    );
+    const stepActivityEventsOnly = sortedAutomaticEvents.filter(
+      (event) => getAutomaticEventType(event) === "steps",
+    );
     const totalWalkingMinutes = formatDurationMinutes(
-      sortedAutomaticEvents.reduce(
+      walkingEventsOnly.reduce(
         (sum, event) => sum + Number(event.duration_seconds || 0),
         0,
       ),
+    );
+    const totalStepActivityMinutes = formatDurationMinutes(
+      stepActivityEventsOnly.reduce(
+        (sum, event) => sum + Number(event.duration_seconds || 0),
+        0,
+      ),
+    );
+    const totalStepActivitySteps = stepActivityEventsOnly.reduce(
+      (sum, event) =>
+        sum + Number((event.total_steps ?? event.step_count) || 0),
+      0,
     );
 
     const sampledReadingLines =
@@ -1532,11 +1655,22 @@ function InsightsPanelStage1B({
       ...eventLines,
       "",
       "Exercise / automatic events:",
-      ...walkingSessionLines,
+      ...automaticEventLines,
       ...(sortedAutomaticEvents.length > 0
         ? [
-            `Total walking time: ${totalWalkingMinutes} min`,
-            `Walking sessions: ${sortedAutomaticEvents.length}`,
+            ...(walkingEventsOnly.length > 0
+              ? [
+                  `Total walking time: ${totalWalkingMinutes} min`,
+                  `Walking sessions: ${walkingEventsOnly.length}`,
+                ]
+              : []),
+            ...(stepActivityEventsOnly.length > 0
+              ? [
+                  `Step-based activity time: ${totalStepActivityMinutes} min`,
+                  `Step-based activity blocks: ${stepActivityEventsOnly.length}`,
+                  `Step-based activity steps: ${formatStepCount(totalStepActivitySteps)}`,
+                ]
+              : []),
           ]
         : []),
       "",
@@ -2200,7 +2334,9 @@ function Dashboard({ session }) {
   const [events, setEvents] = useState([]);
   const [chartExerciseEvents, setChartExerciseEvents] = useState([]);
   const [sleepEvents, setSleepEvents] = useState([]);
+  const [chartStepRecords, setChartStepRecords] = useState([]);
   const [dataPeriodExerciseEvents, setDataPeriodExerciseEvents] = useState([]);
+  const [dataPeriodStepRecords, setDataPeriodStepRecords] = useState([]);
   const [selectedChartItem, setSelectedChartItem] = useState(null);
   const [activePage, setActivePage] = useState("record");
   const [chartRange, setChartRange] = useState("today");
@@ -2216,10 +2352,14 @@ function Dashboard({ session }) {
   const [isLoadingChartExerciseEvents, setIsLoadingChartExerciseEvents] =
     useState(false);
   const [isLoadingSleepEvents, setIsLoadingSleepEvents] = useState(false);
+  const [isLoadingChartStepRecords, setIsLoadingChartStepRecords] =
+    useState(false);
   const [
     isLoadingDataPeriodExerciseEvents,
     setIsLoadingDataPeriodExerciseEvents,
   ] = useState(false);
+  const [isLoadingDataPeriodStepRecords, setIsLoadingDataPeriodStepRecords] =
+    useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [exportState, setExportState] = useState("");
   const [exportErrorMessage, setExportErrorMessage] = useState("");
@@ -2331,6 +2471,40 @@ function Dashboard({ session }) {
         .from("sleep_events")
         .select(
           "id, start_time, end_time, duration_seconds, source, source_app, source_record_id, sleep_label, stages, raw_payload, created_at",
+        )
+        .lt("start_time", endIso)
+        .gt("end_time", startIso)
+        .order("start_time", { ascending: true })
+        .range(from, to);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = data || [];
+      allRows.push(...rows);
+
+      if (rows.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+    return allRows;
+  }
+
+  async function fetchAllStepRecords(startIso, endIso) {
+    const pageSize = 1000;
+    let from = 0;
+    const allRows = [];
+
+    while (true) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
+        .from("step_records")
+        .select(
+          "id, start_time, end_time, step_count, duration_seconds, source_app, source_record_id, created_at",
         )
         .lt("start_time", endIso)
         .gt("end_time", startIso)
@@ -2753,6 +2927,49 @@ function Dashboard({ session }) {
   useEffect(() => {
     let isCurrent = true;
 
+    async function syncDataPeriodStepRecords() {
+      if (dataPeriod.error || !dataPeriod.start || !dataPeriod.end) {
+        if (!isCurrent) return;
+
+        setDataPeriodStepRecords([]);
+        setIsLoadingDataPeriodStepRecords(false);
+        return;
+      }
+
+      setIsLoadingDataPeriodStepRecords(true);
+
+      try {
+        const data = await fetchAllStepRecords(
+          dataPeriod.start.toISOString(),
+          dataPeriod.end.toISOString(),
+        );
+
+        if (!isCurrent) return;
+
+        setDataPeriodStepRecords(data || []);
+      } catch (error) {
+        console.error("Failed to fetch step_records for data period", error);
+
+        if (!isCurrent) return;
+
+        setDataPeriodStepRecords([]);
+      } finally {
+        if (isCurrent) {
+          setIsLoadingDataPeriodStepRecords(false);
+        }
+      }
+    }
+
+    syncDataPeriodStepRecords();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [dataPeriod, lastUpdatedAt]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
     async function syncChartDayReadings() {
       if (chartRange !== "today") {
         if (!isCurrent) return;
@@ -2929,6 +3146,41 @@ function Dashboard({ session }) {
     }
 
     syncSleepEvents();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [chartWindow.endMs, chartWindow.startMs, lastUpdatedAt]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function syncChartStepRecords() {
+      setIsLoadingChartStepRecords(true);
+
+      try {
+        const data = await fetchAllStepRecords(
+          new Date(chartWindow.startMs).toISOString(),
+          new Date(chartWindow.endMs).toISOString(),
+        );
+
+        if (!isCurrent) return;
+
+        setChartStepRecords(data || []);
+      } catch (error) {
+        console.error("Failed to fetch step_records for chart range", error);
+
+        if (!isCurrent) return;
+
+        setChartStepRecords([]);
+      } finally {
+        if (isCurrent) {
+          setIsLoadingChartStepRecords(false);
+        }
+      }
+    }
+
+    syncChartStepRecords();
 
     return () => {
       isCurrent = false;
@@ -3141,6 +3393,16 @@ function Dashboard({ session }) {
       }));
   }, [chartExerciseEvents, chartWindow]);
 
+  const chartStepActivityBlocks = useMemo(() => {
+    return groupStepRecords(chartStepRecords)
+      .filter((event) => event.endMs > chartWindow.startMs && event.startMs < chartWindow.endMs)
+      .map((event) => ({
+        ...event,
+        x1: Math.max(chartWindow.displayStartMs, event.startMs),
+        x2: Math.min(chartWindow.displayEndMs, event.endMs),
+      }));
+  }, [chartStepRecords, chartWindow]);
+
   const chartSleepBlocks = useMemo(() => {
     return [...sleepEvents]
       .filter((event) => {
@@ -3175,9 +3437,20 @@ function Dashboard({ session }) {
         ...event,
         automaticType: "walking",
       })),
+      ...chartStepActivityBlocks,
       ...chartSleepBlocks,
     ].sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
-  }, [chartSleepBlocks, chartWalkingBlocks]);
+  }, [chartSleepBlocks, chartStepActivityBlocks, chartWalkingBlocks]);
+
+  const dataPeriodAutomaticEvents = useMemo(() => {
+    return [
+      ...dataPeriodExerciseEvents.map((event) => ({
+        ...event,
+        automaticType: "walking",
+      })),
+      ...groupStepRecords(dataPeriodStepRecords),
+    ].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  }, [dataPeriodExerciseEvents, dataPeriodStepRecords]);
 
   const periodReadings = useMemo(() => {
     return [...chartReadings].sort((a, b) => {
@@ -3612,6 +3885,28 @@ function Dashboard({ session }) {
                       />
                     ))}
 
+                    {chartStepActivityBlocks.map((event) => (
+                      <ReferenceArea
+                        key={`steps-${event.id}`}
+                        yAxisId="glucose"
+                        x1={event.x1}
+                        x2={event.x2}
+                        y1={1}
+                        y2={19}
+                        ifOverflow="visible"
+                        className="walking-reference-area"
+                        fill="#22c55e"
+                        fillOpacity={0.08}
+                        strokeOpacity={0}
+                        onClick={() =>
+                          setSelectedChartItem({
+                            type: "automaticEvent",
+                            data: event,
+                          })
+                        }
+                      />
+                    ))}
+
                     {glucoseLineSegments.gapSegments.map((segment, index) => (
                       <Line
                         key={`glucose-gap-${index}`}
@@ -3803,7 +4098,11 @@ function Dashboard({ session }) {
 
           <AutomaticEventsList
             automaticEvents={chartAutomaticEvents}
-            isLoading={isLoadingChartExerciseEvents || isLoadingSleepEvents}
+            isLoading={
+              isLoadingChartExerciseEvents ||
+              isLoadingSleepEvents ||
+              isLoadingChartStepRecords
+            }
             onSelect={(event) =>
               setSelectedChartItem({
                 type: "automaticEvent",
@@ -3900,10 +4199,12 @@ function Dashboard({ session }) {
           userId={session.user.id}
           readings={dataPeriodReadings}
           events={dataPeriodEvents}
-          automaticEvents={dataPeriodExerciseEvents}
+          automaticEvents={dataPeriodAutomaticEvents}
           isLoadingReadings={isLoadingDataPeriodReadings}
           isLoadingEvents={isLoadingEvents}
-          isLoadingAutomaticEvents={isLoadingDataPeriodExerciseEvents}
+          isLoadingAutomaticEvents={
+            isLoadingDataPeriodExerciseEvents || isLoadingDataPeriodStepRecords
+          }
           onExportCombinedData={handleExportCombinedData}
           exportState={exportState}
           exportErrorMessage={exportErrorMessage}
