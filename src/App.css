@@ -2444,13 +2444,20 @@ th {
   }
 
   .modal-backdrop {
-    align-items: end;
-    padding: 12px;
+    align-items: start;
+    padding:
+      max(12px, env(safe-area-inset-top, 0px))
+      12px
+      max(12px, env(safe-area-inset-bottom, 0px));
   }
 
   .event-modal {
     width: 100%;
     max-height: min(100vh - 24px, 100%);
+    max-height: calc(
+      100dvh - max(12px, env(safe-area-inset-top, 0px)) -
+        max(12px, env(safe-area-inset-bottom, 0px))
+    );
     border-radius: 20px;
     padding: 20px 16px 16px;
   }
